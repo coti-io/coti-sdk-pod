@@ -1,0 +1,4 @@
+interface:
+  display_name: "PoD dApp Builder"
+  short_description: "Build and migrate Solidity contracts to fee-aware async PoD privacy flows"
+  default_prompt: "Build or convert Solidity contracts into COTI PoD async patterns using it/ct/gt types, PodLib operations, and Inbox fee/callback handling."

@@ -1,0 +1,85 @@
+name: Publish docs to GitBook
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs-gitbook.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build docs without pushing to the GitBook sync repository"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    env:
+      GITBOOK_SYNC_REPOSITORY: ${{ vars.GITBOOK_SYNC_REPOSITORY }}
+      GITBOOK_SYNC_BRANCH: ${{ vars.GITBOOK_SYNC_BRANCH || 'main' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+
+      - name: Install docs dependencies
+        run: npm run docs:install
+
+      - name: Build docs
+        run: npm run docs:build
+
+      - name: Stop after dry run
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: echo "Docs build succeeded. Skipping GitBook sync because dry_run is enabled."
+
+      - name: Verify docs publish source is main
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "Docs publish must run from the main branch."
+            exit 1
+          fi
+
+      - name: Validate GitBook sync configuration
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        env:
+          GITBOOK_SYNC_TOKEN: ${{ secrets.GITBOOK_SYNC_TOKEN }}
+        run: |
+          if [ -z "$GITBOOK_SYNC_REPOSITORY" ]; then
+            echo "GITBOOK_SYNC_REPOSITORY repository variable is required, for example cotitech-io/coti-pod-sdk-gitbook."
+            exit 1
+          fi
+          if [ -z "$GITBOOK_SYNC_TOKEN" ]; then
+            echo "GITBOOK_SYNC_TOKEN secret is required with write access to $GITBOOK_SYNC_REPOSITORY."
+            exit 1
+          fi
+
+      - name: Push docs to GitBook sync repository
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        env:
+          GITBOOK_SYNC_TOKEN: ${{ secrets.GITBOOK_SYNC_TOKEN }}
+        run: |
+          WORKDIR="$(mktemp -d)"
+          cp -R docs/. "$WORKDIR/"
+          rm -f "$WORKDIR/Makefile" "$WORKDIR/mkdocs.yml" "$WORKDIR/requirements.txt"
+
+          git -C "$WORKDIR" init
+          git -C "$WORKDIR" checkout -b "$GITBOOK_SYNC_BRANCH"
+          git -C "$WORKDIR" config user.name "github-actions[bot]"
+          git -C "$WORKDIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$WORKDIR" add .
+          git -C "$WORKDIR" commit -m "Update GitBook docs from ${GITHUB_SHA}"
+          git -C "$WORKDIR" remote add origin "https://x-access-token:${GITBOOK_SYNC_TOKEN}@github.com/${GITBOOK_SYNC_REPOSITORY}.git"
+          git -C "$WORKDIR" push --force origin "$GITBOOK_SYNC_BRANCH"

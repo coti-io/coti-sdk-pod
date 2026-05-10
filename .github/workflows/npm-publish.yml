@@ -1,0 +1,89 @@
+name: Publish npm package
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run publish validation without publishing to npm"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '22.15.1' }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify publish source is main
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF_NAME" != "main" ]; then
+              echo "Manual npm publish must be run from the main branch."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main; then
+            echo "Tag ${GITHUB_REF_NAME} does not point to a commit on main."
+            exit 1
+          fi
+
+      - name: Verify tag matches package version
+        if: github.ref_type == 'tag'
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) must match package.json version ($PACKAGE_VERSION)."
+            exit 1
+          fi
+
+      - name: Verify npm package
+        run: npm run ci:verify
+
+      - name: Ensure version is not already published
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: |
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published."
+            exit 1
+          fi
+
+      - name: Dry-run npm publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: npm run publish:dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

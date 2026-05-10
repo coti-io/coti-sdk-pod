@@ -1,0 +1,68 @@
+{
+  "name": "@coti/pod-sdk",
+  "version": "0.1.0",
+  "description": "Coti PoD SDK - TypeScript utilities for PoD dApps",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc --project tsconfig.json",
+    "pack:dry-run": "npm pack --dry-run",
+    "publish:dry-run": "npm publish --dry-run",
+    "ci:verify": "npm run build && npm run pack:dry-run",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build",
+    "test:integ": "vitest run tests/integ",
+    "docs:install": "make -C docs install",
+    "docs:serve": "make -C docs serve",
+    "docs:build": "make -C docs build"
+  },
+  "keywords": [
+    "coti",
+    "pod",
+    "sdk",
+    "solidity",
+    "mpc"
+  ],
+  "author": "",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@coti-io/coti-sdk-typescript": "^1.0.0",
+    "ethers": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cotitech-io/coti-pod-sdk.git"
+  },
+  "homepage": "https://github.com/cotitech-io/coti-pod-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/cotitech-io/coti-pod-sdk/issues"
+  }
+}
