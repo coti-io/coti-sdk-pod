@@ -1,6 +1,6 @@
 {
   "name": "@coti/pod-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Coti PoD SDK - TypeScript utilities for PoD dApps",
   "type": "module",
   "sideEffects": false,
