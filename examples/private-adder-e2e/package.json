@@ -1,0 +1,23 @@
+{
+  "name": "private-adder-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build:sdk": "npm run build --prefix ../..",
+    "compile": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy.ts --network sepolia",
+    "test": "npm run build:sdk && vitest run test",
+    "test:watch": "vitest test"
+  },
+  "devDependencies": {
+    "@coti-io/coti-contracts": "github:coti-io/coti-contracts#main",
+    "@coti-io/coti-sdk-typescript": "^1.0.8",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "ethers": "^6.17.0",
+    "hardhat": "^2.22.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.6"
+  }
+}

@@ -51,10 +51,7 @@ describe("encodePodMethodArguments", () => {
       },
     ];
     const encoded = await encodePodMethodArguments(args, "testnet", false);
-    expect(encoded[0].value).toEqual({
-      ciphertext: 123n,
-      signature: "0xsig",
-    });
+    expect(encoded[0].value).toEqual([123n, "0xsig"]);
   });
 });
 

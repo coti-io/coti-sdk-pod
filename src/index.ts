@@ -9,6 +9,7 @@ export {
   type EncryptedString,
   type EncryptedValue,
   type EncryptOptions,
+  type EncryptContext,
 } from "./coti-pod-crypto.js";
 
 export {

@@ -4,7 +4,12 @@
  * Encrypt uses the PoD encryption service; decrypt uses @coti-io/coti-sdk-typescript.
  */
 
-import { decryptUint, decryptString } from "@coti-io/coti-sdk-typescript";
+import {
+  decryptCtUint256,
+  decryptUint,
+  decryptString,
+  isCtUint256Shape,
+} from "@coti-io/coti-sdk-typescript";
 import type { ctString } from "@coti-io/coti-sdk-typescript";
 import { EncryptionServiceError } from "./errors.js";
 
@@ -58,7 +63,17 @@ export interface EncryptOptions {
   signal?: AbortSignal;
   /** Request timeout in milliseconds (default 30_000). */
   timeoutMs?: number;
+  /** PoD encryption signing context (optional). */
+  contractAddress?: string;
+  functionSelector?: string;
+  userAddress?: string;
 }
+
+/** Optional signing context for PoD encryption service. */
+export type EncryptContext = Pick<
+  EncryptOptions,
+  "contractAddress" | "functionSelector" | "userAddress"
+>;
 
 /** Whether the Solidity-side type is an encrypted input (`it*`). */
 export function isEncryptedType(dataType: DataType): boolean {
@@ -115,7 +130,14 @@ export class CotiPodCrypto {
   ): Promise<EncryptedValue> {
     const baseUrl = ENCRYPTION_SERVICE[network] ?? network;
     const url = `${baseUrl.replace(/\/$/, "")}/buildEncryptedInputs`;
-    const body = { dataType: toPlainServiceType(dataType), value };
+    const body: Record<string, unknown> = {
+      dataType: toPlainServiceType(dataType),
+      value,
+    };
+    if (options?.contractAddress) body.contractAddress = options.contractAddress;
+    if (options?.functionSelector) body.functionSelector = options.functionSelector;
+    if (options?.userAddress) body.userAddress = options.userAddress;
+
     const timeoutMs = options?.timeoutMs ?? DEFAULT_ENCRYPT_TIMEOUT_MS;
     const { signal, cleanup } = mergeAbortSignals(options?.signal, timeoutMs);
 
@@ -178,12 +200,17 @@ export class CotiPodCrypto {
    * @param ciphertext - For scalar types: hex string (e.g. from contract). For String: JSON of ctString or ctString object.
    */
   static decrypt(
-    ciphertext: string | ctString,
+    ciphertext: string | ctString | Record<string, unknown>,
     aesKey: string,
     dataType: DataType = DataType.Uint64
   ): string {
     const key = aesKey.trim();
     if (!key) throw new Error("AES key is required");
+
+    if (dataType === DataType.Uint256 && isCtUint256Shape(ciphertext)) {
+      const decrypted = decryptCtUint256(ciphertext, key);
+      return decrypted.toString();
+    }
 
     if (dataType === DataType.String || dataType === DataType.itString) {
       let ct: ctString | Record<string, unknown>;
@@ -202,7 +229,11 @@ export class CotiPodCrypto {
       return decryptString({ value }, key);
     }
 
-    const raw = (typeof ciphertext === "string" ? ciphertext : "").trim();
+    if (typeof ciphertext !== "string") {
+      throw new Error("scalar decrypt expects a hex string ciphertext");
+    }
+
+    const raw = ciphertext.trim();
     if (!raw || raw === "0x" || raw === "0x0") {
       return dataType === DataType.Bool || dataType === DataType.itBool ? "false" : "0";
     }
