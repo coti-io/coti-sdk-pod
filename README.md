@@ -10,6 +10,8 @@ From npm:
 npm install @coti/pod-sdk ethers
 ```
 
+`ethers` v6 is a **peer dependency** — install it in your app alongside this package.
+
 From GitHub:
 
 ```bash

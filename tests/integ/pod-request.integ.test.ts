@@ -62,7 +62,7 @@ function renderStatus(s: RequestTrackingResponse, prefix = ""): string {
     `${prefix}${s.requestId}  ` +
     `src=${s.sourceChainId} → tgt=${s.targetChainId}  ` +
     `ts=${s.timestamp}  ${s.isTwoWay ? "2way" : "1way"}  ` +
-    `mined=${s.minedOnTarget}  ` +
+    `mined=${s.minedOnTarget}  executed=${s.executedOnTarget}  ` +
     `gasLimit(remote/local)=${s.remoteGasLimit}/${s.localGasLimit}`;
   const parts = [head];
   if (s.execution) {

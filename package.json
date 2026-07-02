@@ -24,11 +24,12 @@
     "build": "tsc --project tsconfig.json",
     "pack:dry-run": "npm pack --dry-run",
     "publish:dry-run": "npm publish --dry-run",
-    "ci:verify": "npm run build && npm run pack:dry-run",
+    "test": "vitest run tests/unit",
+    "test:integ": "vitest run tests/integ",
+    "ci:verify": "npm run build && npm run test && npm run pack:dry-run",
     "prepare": "npm run build",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run build",
-    "test:integ": "vitest run tests/integ"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "coti",
@@ -37,7 +38,7 @@
     "solidity",
     "mpc"
   ],
-  "author": "",
+  "author": "COTI",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -47,10 +48,13 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@coti-io/coti-sdk-typescript": "^1.0.8",
-    "ethers": "^6.17.0"
+    "@coti-io/coti-sdk-typescript": "^1.0.8"
+  },
+  "peerDependencies": {
+    "ethers": "^6.0.0"
   },
   "devDependencies": {
+    "ethers": "^6.17.0",
     "typescript": "^5.0.0",
     "vitest": "^3.2.6"
   },
