@@ -1,6 +1,6 @@
 {
   "name": "@coti/pod-sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Coti PoD SDK - TypeScript utilities for PoD dApps",
   "type": "module",
   "sideEffects": false,
@@ -28,10 +28,7 @@
     "prepare": "npm run build",
     "prepack": "npm run build",
     "prepublishOnly": "npm run build",
-    "test:integ": "vitest run tests/integ",
-    "docs:install": "make -C docs install",
-    "docs:serve": "make -C docs serve",
-    "docs:build": "make -C docs build"
+    "test:integ": "vitest run tests/integ"
   },
   "keywords": [
     "coti",
@@ -59,10 +56,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cotitech-io/coti-pod-sdk.git"
+    "url": "git+https://github.com/coti-io/coti-sdk-pod.git"
   },
-  "homepage": "https://github.com/cotitech-io/coti-pod-sdk#readme",
+  "homepage": "https://github.com/coti-io/coti-sdk-pod#readme",
   "bugs": {
-    "url": "https://github.com/cotitech-io/coti-pod-sdk/issues"
+    "url": "https://github.com/coti-io/coti-sdk-pod/issues"
   }
 }

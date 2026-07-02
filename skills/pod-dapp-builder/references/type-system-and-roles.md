@@ -1,68 +1,61 @@
 # Type System And Roles
 
+Canonical doc: [reference-data-types.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/reference-data-types.md) (`MpcCore.sol` in `@coti-io/coti-contracts`).
+
 ## Purpose
 
-Use this reference to map data across client, EVM, and COTI boundaries without leaking sensitive information or breaking ABI compatibility.
+Map data across client, EVM, and COTI boundaries without leaking sensitive information or breaking ABI compatibility.
 
-## Canonical Type Meanings
+## Canonical type meanings
 
-- `it*` types:
-  - Treat as encrypted + signed user input.
-  - Accept on EVM-facing entrypoints.
-  - Forward to COTI/private execution entrypoints.
-  - Common examples: `itBool`, `itUint64`, `itUint128`, `itUint256`.
+- **`it*`** — encrypted + signed user input; EVM entrypoints and `MpcAbiCodec` payloads.
+- **`ct*`** — encrypted output decryptable client-side with account AES key; EVM storage and callbacks.
+- **`gt*`** — COTI-only private compute values; never in EVM public interfaces.
+- **Public types** — non-private metadata only (`address`, `bytes32`, enums, etc.).
 
-- `ct*` types:
-  - Treat as encrypted output for a specific user (user AES key context).
-  - Store/return on EVM side when user-readable private results are required.
-  - Use for callback payloads consumed by frontends/wallet flows.
-  - Common examples: `ctBool`, `ctUint64`, `ctUint128`, `ctUint256`.
+## Solidity shapes (current `MpcCore`)
 
-- `gt*` types:
-  - Treat as COTI-only internal private compute values.
-  - Use only in COTI-side smart contracts and MPC core logic.
-  - Do not expose directly on EVM/public interfaces.
-  - Common examples: `gtBool`, `gtUint64`, `gtUint128`, `gtUint256`.
+| Family | Narrow lanes (`8`–`128`) | 256-bit |
+| --- | --- | --- |
+| `ct*` | `type ctUint* is uint256` (single word) | `struct { ctUint128 ciphertextHigh; ctUint128 ciphertextLow; }` |
+| `gt*` | `type gtUint* is uint256` | `struct { gtUint128 high; gtUint128 low; }` |
+| `it*` | struct: ciphertext + `bytes` signature | struct: ciphertext + `bytes[2][2]` signature |
 
-- Public Solidity types:
-  - Keep non-private metadata/control fields public (`address`, `uint`, `bytes32`, enums).
-  - Avoid storing sensitive business values in plaintext.
+Off-chain: narrow `ct*` → `bigint` or hex; `ctUint256` → `{ ciphertextHigh, ciphertextLow }`.
 
-## Boundary Rules
+## Critical gotcha: EVM `it*` → COTI `gt*`
+
+Custom COTI functions invoked through the Inbox must declare **`gt*`** parameters, not `it*`. The pipeline validates `it*` and re-encodes to `gt*` before COTI invocation.
+
+## Boundary rules
 
 1. Accept private user input as `it*` on EVM methods.
-2. Encode and forward requests via Inbox (`sendTwoWayMessage` or `sendOneWayMessage`).
-3. Perform private operations in COTI context with `gt*`.
-4. Convert COTI results to `ct*` before responding to EVM.
-5. Decode callback payloads into `ct*`/public fields and persist them.
+2. Forward via Inbox (`sendTwoWayMessage` / `sendOneWayMessage`).
+3. Compute on COTI with `gt*`.
+4. Return `ct*` in callback `abi.encode(...)`.
+5. Decode callback into `ct*` and persist; client decrypts locally.
 
-## Width And Operation Coverage
+## PodLib width coverage
 
-- `PodLib` composes width-specific helpers:
-  - `PodLib64` for 64-bit operations.
-  - `PodLib128` for 128-bit operations.
-  - `PodLib256` for 256-bit operations.
-- Operations include arithmetic, comparisons, bitwise, mux, shifts, and randomness dispatch methods.
-- Keep callback decode types aligned with the selected operation width.
+- `PodLib64` / `PodLib128` / `PodLib256` — arithmetic, compare, bitwise, mux, shift, randomness.
+- Callback decode width must match the primitive (`ctUint64` vs `ctUint256`, etc.).
 
-## COTI Conversion Patterns
+## COTI conversion patterns
 
-- `ct -> gt`: `MpcCore.onBoard(cipher)`
-- `gt -> ct` (contract-held ciphertext): `MpcCore.offBoard(value)`
-- `gt -> ct` (user-targeted ciphertext): `MpcCore.offBoardToUser(value, user)`
-- Public literal to private compute value: `MpcCore.setPublic64(x)` or matching width helper
+- `ct → gt`: `MpcCore.onBoard(...)`
+- `gt → ct` (contract): `MpcCore.offBoard(...)`
+- `gt → ct` (user): `MpcCore.offBoardToUser(..., user)`
 
-## Interface Alignment Rules
+## Interface alignment
 
-- Keep EVM-side method call selector and COTI-side function signature strictly aligned.
-- Keep argument order identical across `MpcAbiCodec` and target COTI function.
-- Keep callback `abi.decode(...)` layout identical to COTI `abi.encode(...)` layout.
-- Include result owner/user address whenever converting compute result to user `ct*`.
+- `MpcAbiCodec` selector and argument order match COTI target function.
+- Callback `abi.decode` matches COTI `abi.encode` exactly.
+- Custom flows: verify `inboxMsgSender()` matches expected COTI peer.
 
-## Common Failure Modes
+## Common failure modes
 
-- Using `gt*` in EVM-visible interfaces.
-- Returning raw `gt*` from COTI to EVM callback.
-- Forgetting `onlyInbox` on callbacks.
-- Decoding callback payload with wrong tuple layout.
-- Treating asynchronous result as immediate return value.
+- `gt*` in EVM-visible APIs.
+- Wrong callback decode tuple or width.
+- Missing `onlyInbox` on callbacks.
+- Treating async PoD as synchronous return.
+- Decrypting `ctUint256` with narrow-lane `DataType` (use `Uint256` + two limbs).

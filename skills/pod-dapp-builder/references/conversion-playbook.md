@@ -1,41 +1,43 @@
 # Conversion Playbook
 
+Canonical docs: [contract-patterns-checklist.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/contract-patterns-checklist.md), [cookbook-private-investor-allocations.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/cookbook-private-investor-allocations.md).
+
 ## Purpose
 
-Use this playbook to convert synchronous non-private Solidity logic into PoD asynchronous privacy flows.
+Convert synchronous non-private Solidity logic into PoD asynchronous privacy flows.
 
-## Architecture Decision
+## Architecture decision
 
-Choose one pattern per operation:
+1. **Library-backed** — operation exists in `PodLib` (`add64`, `gt256`, …). EVM contract only; no custom COTI Solidity.
+2. **Custom COTI** — unsupported primitives or rich private state. EVM orchestrator + COTI contract via `MpcAbiCodec`.
 
-1. Library-backed pattern:
-   - Use when operation is available in shared executor (`PodLib` methods such as `add64`, `gt64`, `add128`, `add256`, and related ops).
-   - Implement only EVM-side request + callback contract.
+See [tutorials overview](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/tutorials-privacy-on-demand.md).
 
-2. Custom COTI pattern:
-   - Use when operation is not available in shared executor.
-   - Implement EVM request contract + COTI privacy contract.
+## Migration checklist
 
-## Migration Checklist
+1. Classify sensitive inputs/state/outputs → `it*` / `ct*` / `gt*` / public.
+2. Replace sensitive inputs with `it*` on EVM entrypoints.
+3. Move sensitive logic to COTI (`gt*`) or PodLib primitives.
+4. Add fee path: estimate with `calculateTwoWayFeeRequiredInLocalToken` or `PodContract.estimateFee`.
+5. Replace sync returns with request ID + callback fulfillment.
+6. Persist `ct*` for client decrypt; implement `onlyInbox` callbacks and error handlers.
+7. Client: `PodContract.extractRequestIds` + `PodRequest.trackRequest` + `CotiPodCrypto.decrypt`.
+8. Update tests for async completion and fee underfunding.
 
-1. Identify sensitive inputs, state, and outputs in legacy contract.
-2. Replace sensitive function inputs with `it*`.
-3. Move sensitive math/logic from EVM sync path to COTI private path (`gt*`).
-4. Add explicit fee path:
-   - Estimate two-way requirement with `calculateTwoWayFeeRequiredInLocalToken(...)`.
-   - Decide `msg.value` (total) and `callbackFeeLocalWei` (callback slice).
-5. Replace direct returns with:
-   - Request submission
-   - Request ID tracking
-   - Callback fulfillment
-6. Persist returned `ct*` outputs for user retrieval.
-7. Add callback and error handlers restricted by `onlyInbox`.
-8. Emit request/result events for observability.
-9. Update tests to assert eventual callback state instead of immediate return.
+## EVM preset wiring
 
-## Async State Machine Template
+```solidity
+import "@coti-io/coti-contracts/contracts/pod/mpc/PodLib.sol";
+import "@coti-io/coti-contracts/contracts/pod/mpc/PodUserSepolia.sol";
 
-Use this template in EVM-side contracts:
+contract MyApp is PodLib, PodUserSepolia {
+    constructor() PodLibBase(msg.sender) {}
+}
+```
+
+Do **not** call `setInbox` / `configureCoti` manually when using `PodUserSepolia` / `PodUserFuji` — presets handle this in their constructor.
+
+## Async state machine template
 
 ```solidity
 mapping(bytes32 => address) private _requestOwner;
@@ -49,7 +51,13 @@ function privateOp(
     itUint64 calldata b,
     uint256 callbackFeeLocalWei
 ) external payable {
-    bytes32 requestId = /* call PodLib.* helper or inbox.sendTwoWayMessage(..., callbackFeeLocalWei) */;
+    bytes32 requestId = add64(
+        a, b, msg.sender,
+        this.privateOpCallback.selector,
+        this.onDefaultMpcError.selector,
+        msg.value,
+        callbackFeeLocalWei
+    );
     _requestOwner[requestId] = msg.sender;
     emit PrivateOpRequested(requestId, msg.sender);
 }
@@ -65,44 +73,50 @@ function privateOpCallback(bytes calldata data) external onlyInbox {
 }
 ```
 
-## Custom COTI Contract Template
-
-Use this shape for COTI privacy logic:
+## Custom COTI contract template
 
 ```solidity
 function executePrivate(/* args */) external onlyInbox {
-    // 1) Convert user ciphertext/input to private compute domain
     // gtUint64 x = MpcCore.onBoard(ctX);
-    // 2) Execute private logic
     // gtUint64 y = MpcCore.add(x, z);
-    // 3) Convert to user ciphertext response
     // ctUint64 out = MpcCore.offBoardToUser(y, user);
-    // 4) Respond with ABI-aligned payload
     inbox.respond(abi.encode(out));
 }
 ```
 
-## Example Mapping In This Repository
+COTI parameters use **`gt*`**, not `it*`. Verify `inboxMsgSender()` on the EVM callback when using split contracts.
 
-- Minimal library-backed RPC:
-  - EVM: `contracts/examples/it128/PodAdder128.sol`
-  - EVM: `contracts/examples/it256/PodAdder256.sol`
-- Comparison flow with request tracking:
-  - EVM: `contracts/examples/millionaire/Millionaire.sol`
-- Split EVM/COTI custom logic:
-  - EVM: `contracts/examples/perc20/PErc20.sol`
-  - COTI: `contracts/examples/perc20/PErc20Coti.sol`
-- Shared library internals:
-  - `contracts/mpc/PodLib.sol`
-  - `contracts/mpc/PodLibBase.sol`
-  - `contracts/mpc/PodLib64.sol`
-  - `contracts/mpc/PodLib128.sol`
-  - `contracts/mpc/PodLib256.sol`
+## Examples in `@coti-io/coti-contracts`
 
-## Review Criteria
+| Example | Path |
+| --- | --- |
+| Minimal adder (64-bit) | `contracts/pod/examples/MpcAdder.sol` |
+| 128 / 256-bit adders | `contracts/pod/examples/it128/PodAdder128.sol`, `it256/PodAdder256.sol` |
+| Callback fault testing | `contracts/pod/examples/MpcAdderPausable.sol` |
+| Private tokens | `contracts/pod/token/perc20/`, `token/erc7984/` |
 
-- Verify no synchronous assumption remains for private operations.
-- Verify all sensitive values leave plaintext storage paths.
-- Verify error path is observable (`onDefaultMpcError` or custom handler).
-- Verify callback payload schema is explicit and versionable.
-- Verify fee assumptions are explicit (gas price, `msg.value`, callback slice).
+Full walkthrough: [tutorial-private-adder-sepolia.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/tutorial-private-adder-sepolia.md).
+
+## TypeScript client flow
+
+```typescript
+import { PodContract, PodRequest, CotiPodCrypto, DataType, type PodSdkConfig } from "@coti/pod-sdk";
+
+const tracker = new PodRequest(config);
+const pod = new PodContract(appAddress, abi, signer, { config });
+
+const tx = await pod.encryptAndCallMethod("add", args, feeCfg);
+const receipt = await tx.wait();
+const [requestId] = await pod.extractRequestIds(receipt!.hash);
+
+// Poll until terminal state — see typescript-pod-sdk.md
+const status = await tracker.trackRequest(chainId, requestId);
+```
+
+## Review criteria
+
+- No sync assumption for private ops.
+- No plaintext sensitive storage on EVM.
+- Observable error path (`onDefaultMpcError`, `PodRequest.execution`).
+- Explicit fee assumptions documented.
+- Docs link to `documentation/privacy-on-demand/` — not `coti-sdk-pod/docs/`.

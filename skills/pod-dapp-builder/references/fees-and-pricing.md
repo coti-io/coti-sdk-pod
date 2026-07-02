@@ -1,74 +1,70 @@
 # Fees And Pricing
 
+Canonical doc: [how-poa-fees-work.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/how-poa-fees-work.md).
+
+Implementation: [`InboxFeeManager.sol`](https://github.com/coti-io/coti-pod-inbox-contracts/blob/main/contracts/fee/InboxFeeManager.sol) in `@coti-io/coti-pod-inbox-contracts`.
+
 ## Purpose
 
-Use this reference whenever building or converting PoD request flows. Fee handling is mandatory for successful remote execution and callback delivery.
+Fee handling is mandatory for successful remote execution and callback delivery on two-way PoD flows.
 
-## Core Model
+## Core model
 
-- Every outbound two-way request must carry fee value in **local native token** as `msg.value` on `IInbox.sendTwoWayMessage`.
-- The Inbox converts **wei → gas units** using `tx.gasprice` (or `DEFAULT_GAS_PRICE` when zero).
-- Stored `Request.targetFee` and `Request.callerFee` are **gas-unit budgets**, not wei.
-- For two-way flows, you split `msg.value` into:
-  - **Remote leg** → becomes `targetFee` (after oracle scaling for minimum checks).
-  - **Callback leg** → `callbackFeeLocalWei` → becomes `callerFee` in gas units.
-- `sendTwoWayMessage` takes `callbackFeeLocalWei` and uses `msg.value` as **total** fee (the callback argument is a slice of the total, not an add-on).
+- Pay in **local native token** as `msg.value` on `IInbox.sendTwoWayMessage`.
+- Inbox converts wei → **gas-unit budgets** using `tx.gasprice`.
+- Two-way split:
+  - **Remote leg** → `Request.targetFee` (gas units, oracle-scaled).
+  - **Callback leg** → `callbackFeeLocalWei` slice of total → `Request.callerFee`.
+- `callbackFeeLocalWei` is a **slice of** `msg.value`, not an add-on.
 
 ## Operator configuration
 
-- `InboxMiner.setPriceOracle` and `updateMinFeeConfigs(local, remote)` define oracle address and `FeeConfig` templates (`InboxFeeManager`).
-- `FeeConfig` is either **constant** minimum gas units (`constantFee > 0`) or a **template** with `gasPerByte`, `callbackExecutionGas`, `errorLength`, and `bufferRatioX10000`.
-- On-chain validation uses `abi.encode(methodCall).length` as the payload size term for minima.
+- `InboxMiner.setPriceOracle`, `updateMinFeeConfigs` — [`coti-pod-inbox-contracts`](https://github.com/coti-io/coti-pod-inbox-contracts).
+- `FeeConfig`: constant minimum gas units or template (`gasPerByte`, `callbackExecutionGas`, `errorLength`, `bufferRatioX10000`).
 
-## Mandatory estimation API (off-chain / UI)
+## Estimation (off-chain / UI)
 
-On the deployed Inbox (same `FeeConfig` and oracle as production):
+**On-chain view** (deployed Inbox):
 
-`calculateTwoWayFeeRequiredInLocalToken(remoteMethodCallSize, callBackMethodCallSize, remoteMethodExecutionGas, callBackMethodExecutionGas, gasPrice)`
+```
+calculateTwoWayFeeRequiredInLocalToken(
+  remoteMethodCallSize,
+  callBackMethodCallSize,
+  remoteMethodExecutionGas,
+  callBackMethodExecutionGas,
+  gasPrice
+)
+```
 
-Interpretation:
+Returns remote and callback budgets in **local wei**.
 
-- `remoteMethodCallSize` / `callBackMethodCallSize`: byte sizes for template alignment (match real encoded payloads as closely as possible).
-- `remoteMethodExecutionGas` / `callBackMethodExecutionGas`: expected execution gas beyond template minima.
-- `gasPrice`: wei-per-gas assumption matching the send transaction’s effective price.
+**TypeScript** (`@coti/pod-sdk`):
 
-Returns (both in **local native wei**, remote leg scaled via oracle ratio):
+```typescript
+const pod = new PodContract(appAddress, abi, signer, { config });
+const fee = await pod.estimateFee("add", podArgs, {
+  forwardGasLimit: 400_000n,
+  callBackGasLimit: 250_000n,
+  callBackDataSize: 512n,
+  gasPrice: (await signer.provider!.getFeeData()).gasPrice!,
+});
+// fee.totalFee, fee.remoteFee, fee.callBackFee
+```
 
-- First: budget attributable to the **remote** leg in local-token terms.
-- Second: budget attributable to the **callback** leg.
+Mark exactly one `PodMethodArgument` with `isCallBackFee: true` — `PodContract` injects `fee.callBackFee` before send.
 
-Use them to choose `callbackFeeLocalWei` and `msg.value` with safety margin. See repository doc `/docs/contracts/04-fees-gas-and-oracle.md`.
+## Dispatch patterns
 
-## Practical Assumptions
+**PodLib helpers** — pass `msg.value` as `totalValueWei` and `callbackFeeLocalWei` into `add64`, `add256`, `_sendTwoWayWithFee`, etc.
 
-- Use the same gas price assumption as the wallet will use for the send tx.
-- Add safety headroom above estimator output.
-- Ensure `callbackFeeLocalWei` is:
-  - Greater than zero.
-  - Less than or equal to total fee (`msg.value`).
-  - Large enough in **gas units** after `/ gasPrice` to satisfy `localMinFeeConfig`.
+**Direct Inbox** — `sendTwoWayMessage{value: totalFee}(..., callbackFeeLocalWei)`.
 
-## Dispatch Patterns
+## Validation
 
-Using `PodLib` / `PodLibBase`:
+- Underfunded total: `TotalFeeTooLow`, `TargetFeeTooLow`.
+- Underfunded callback: `CallbackFeeTooLow`.
+- Test both revert paths plus success with buffered estimate.
 
-- Pass `msg.value` as `totalValueWei` and explicit `callbackFeeLocalWei` into helpers such as `add64` / `gt64` / `_sendTwoWayWithFee`.
+## Fault testing
 
-Direct Inbox calls:
-
-- Call `sendTwoWayMessage{value: totalFee}(..., callbackFeeLocalWei)`.
-
-## Validation And Failure Behavior
-
-- Underfunded total fee can revert (`TotalFeeTooLow`, `TargetFeeTooLow`).
-- Underfunded callback slice can revert (`CallbackFeeTooLow`).
-- Treat fee-related failures as first-class test scenarios.
-
-## Test Guidance
-
-At minimum include:
-
-1. Success case with estimated+buffered fees.
-2. Revert case with too-low total fee.
-3. Revert case with too-low callback fee.
-4. Two-way response path where callback budget is consumed as expected.
+Use [`MpcAdderPausable.sol`](https://github.com/coti-io/coti-contracts/blob/main/contracts/pod/examples/MpcAdderPausable.sol): COTI execution can succeed while host-chain callback reverts when paused — verify `PodRequest` / `ErrorRemoteCall` / UI failed state.

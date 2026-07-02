@@ -49,7 +49,7 @@ export interface PodContractOptions {
 const FEE_FN =
   "function calculateTwoWayFeeRequiredInLocalToken(uint256,uint256,uint256,uint256,uint256) view returns (uint256,uint256)";
 const MSG_SENT =
-  "event MessageSent(bytes32 indexed requestId,uint256 indexed targetChainId,address indexed targetContract,tuple(bytes4 selector,bytes data,bytes8[] datatypes,bytes32[] datalens) methodCall,bytes4 callbackSelector,bytes4 errorSelector)";
+  "event MessageSent(bytes32 indexed requestId,uint256 indexed targetChainId,address indexed targetContract,bytes4 methodSelector,bytes32 methodCallHash,uint256 dataLength,uint16 datatypeCount,uint16 datalenCount,bytes4 callbackSelector,bytes4 errorSelector)";
 
 function providerFromRunner(r: ethers.ContractRunner): ethers.Provider {
   if (typeof (r as ethers.Provider).getTransactionReceipt === "function") return r as ethers.Provider;
@@ -246,9 +246,16 @@ export class PodContract {
     if (!rc) throw new Error(`no receipt: ${txHash}`);
     const want = (await this.inboxAddr()).toLowerCase();
     const iface = new ethers.Interface([MSG_SENT]);
+    const topic0 = iface.getEvent("MessageSent")!.topicHash;
     const out: string[] = [];
     for (const log of rc.logs) {
       if (log.address.toLowerCase() !== want) continue;
+      if (log.topics[0] !== topic0) continue;
+      // requestId is the first indexed field (topics[1]) on compact MessageSent events.
+      if (log.topics[1]) {
+        out.push(ethers.hexlify(log.topics[1]));
+        continue;
+      }
       try {
         const p = iface.parseLog({ topics: log.topics as string[], data: log.data });
         if (p?.name === "MessageSent") out.push(ethers.hexlify(p.args.requestId as ethers.BytesLike));
