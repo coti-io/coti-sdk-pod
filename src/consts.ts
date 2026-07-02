@@ -1,19 +1,25 @@
 /**
  * Default PoD Inbox addresses by chain id.
- * Sources: `contracts/mpc/PodUserSepolia.sol`, `contracts/InboxUserCotiTestnet.sol`
+ * Source: `@coti-io/coti-contracts` `PodNetworkConstants.INBOX` (CREATE3, same on all chains).
  */
 
-/** Sepolia (11155111) — EVM-side inbox (`PodUserSepolia.INBOX_ADDRESS`). */
-export const SEPOLIA_DEFAULT_INBOX_ADDRESS =
-  "0xFa158f9e49C8bb77f971c3630EbCD23a8a88D14E" as const;
+/** Shared CREATE3 inbox on Sepolia, COTI testnet, and Avalanche Fuji. */
+export const DEFAULT_INBOX_ADDRESS =
+  "0xAb625bE229F603f6BBF964474AFf6d5487e364De" as const;
 
-/** COTI testnet (7082400) — inbox (`InboxUserCotiTestnet.COTI_TESTNET_INBOX`). */
-export const COTI_TESTNET_DEFAULT_INBOX_ADDRESS =
-  "0x0f9A5cD00450Db1217839C35D23D56F96d6331AE" as const;
+/** Sepolia (11155111) — EVM-side inbox. */
+export const SEPOLIA_DEFAULT_INBOX_ADDRESS = DEFAULT_INBOX_ADDRESS;
+
+/** COTI testnet (7082400) — COTI-side inbox. */
+export const COTI_TESTNET_DEFAULT_INBOX_ADDRESS = DEFAULT_INBOX_ADDRESS;
+
+/** Avalanche Fuji (43113) — EVM-side inbox. */
+export const FUJI_DEFAULT_INBOX_ADDRESS = DEFAULT_INBOX_ADDRESS;
 
 /** `chainId` as decimal string → default inbox for fee estimation / log filtering. */
 export const DEFAULT_INBOX_ADDRESS_BY_CHAIN_ID: Readonly<Record<string, string>> =
   Object.freeze({
     "11155111": SEPOLIA_DEFAULT_INBOX_ADDRESS,
+    "43113": FUJI_DEFAULT_INBOX_ADDRESS,
     "7082400": COTI_TESTNET_DEFAULT_INBOX_ADDRESS,
   });
