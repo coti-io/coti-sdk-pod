@@ -29,7 +29,8 @@
     "ci:verify": "npm run build && npm run test && npm run pack:dry-run",
     "prepare": "npm run build",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test:e2e:example": "npm test --prefix examples/private-adder-e2e"
   },
   "keywords": [
     "coti",

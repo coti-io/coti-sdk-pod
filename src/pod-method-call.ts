@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import {
   CotiPodCrypto,
   DataType,
+  type EncryptContext,
   type EncryptedString,
   type EncryptedValue,
   isEncryptedType,
@@ -49,8 +50,9 @@ export interface PodContractOptions {
 
 const FEE_FN =
   "function calculateTwoWayFeeRequiredInLocalToken(uint256,uint256,uint256,uint256,uint256) view returns (uint256,uint256)";
+const INBOX_MIN_GAS_PRICE_WEI = 2_000_000_000n;
 const MSG_SENT =
-  "event MessageSent(bytes32 indexed requestId,uint256 indexed targetChainId,address indexed targetContract,bytes4 methodSelector,bytes32 methodCallHash,uint256 dataLength,uint16 datatypeCount,uint16 datalenCount,bytes4 callbackSelector,bytes4 errorSelector)";
+  "event MessageSent(bytes32 indexed requestId,uint256 indexed targetChainId,address indexed targetContract,(bytes4,bytes,bytes8[],bytes32[]) methodCall,bytes4 callbackSelector,bytes4 errorSelector)";
 
 function providerFromRunner(r: ethers.ContractRunner): ethers.Provider {
   if (typeof (r as ethers.Provider).getTransactionReceipt === "function") return r as ethers.Provider;
@@ -70,7 +72,7 @@ function toCt(raw: string | bigint): bigint {
   return BigInt(s);
 }
 
-function itTuple(t: DataType, enc: EncryptedValue): Record<string, unknown> {
+function itTuple(t: DataType, enc: EncryptedValue): unknown {
   if (t === DataType.itString) {
     const s = enc as EncryptedString;
     return {
@@ -78,8 +80,22 @@ function itTuple(t: DataType, enc: EncryptedValue): Record<string, unknown> {
       signature: s.signature,
     };
   }
-  const e = enc as { ciphertext: string | bigint; signature: string };
-  return { ciphertext: toCt(e.ciphertext), signature: e.signature };
+  const e = enc as { ciphertext: unknown; signature: string };
+  const ct = e.ciphertext;
+  if (
+    ct &&
+    typeof ct === "object" &&
+    "ciphertextHigh" in ct &&
+    "ciphertextLow" in ct
+  ) {
+    const limbs = ct as { ciphertextHigh: string | bigint; ciphertextLow: string | bigint };
+    // ABI: itUint256 = ((uint256,uint256),bytes) — unnamed tuple components for ethers.
+    return [
+      [toCt(limbs.ciphertextHigh), toCt(limbs.ciphertextLow)],
+      e.signature,
+    ];
+  }
+  return [toCt(ct as string | bigint), e.signature];
 }
 
 function parseItJson(s: string): EncryptedValue {
@@ -111,14 +127,15 @@ function plainCoerce(t: DataType, v: string): unknown {
 async function resolveArg(
   arg: PodMethodArgument,
   net: string,
-  encrypt: boolean
+  encrypt: boolean,
+  context?: EncryptContext
 ): Promise<unknown> {
   if (typeof arg.value !== "string") {
     throw new Error("argument value must be a string before resolve");
   }
   const { type, value } = arg;
   if (!isEncryptedType(type)) return plainCoerce(type, value);
-  if (encrypt) return itTuple(type, await CotiPodCrypto.encrypt(value, net, type));
+  if (encrypt) return itTuple(type, await CotiPodCrypto.encrypt(value, net, type, context));
   return itTuple(type, parseItJson(value));
 }
 
@@ -134,20 +151,22 @@ export function estimateForwardDataSizeFromArguments(args: PodMethodArgument[]):
 export async function mapPodMethodArgumentsEncoded(
   args: PodMethodArgument[],
   encryptionNetwork: string,
-  encrypt: boolean
+  encrypt: boolean,
+  context?: EncryptContext
 ): Promise<void> {
   for (const a of args) {
-    a.value = await resolveArg(a, encryptionNetwork, encrypt);
+    a.value = await resolveArg(a, encryptionNetwork, encrypt, context);
   }
 }
 
 export async function encodePodMethodArguments(
   args: PodMethodArgument[],
   encryptionNetwork: string,
-  encrypt: boolean
+  encrypt: boolean,
+  context?: EncryptContext
 ): Promise<PodMethodArgument[]> {
   const copy = clonePodMethodArguments(args);
-  await mapPodMethodArgumentsEncoded(copy, encryptionNetwork, encrypt);
+  await mapPodMethodArgumentsEncoded(copy, encryptionNetwork, encrypt, context);
   return copy;
 }
 
@@ -221,7 +240,20 @@ export class PodContract {
     }
     const cb = args.findIndex((a) => a.isCallBackFee);
 
-    await mapPodMethodArgumentsEncoded(args, this.net, encrypt);
+    let encryptContext: EncryptContext | undefined;
+    if (encrypt) {
+      const contractAddress = await this.contract.getAddress();
+      const userAddress = await (
+        this.contract.runner as ethers.Signer
+      ).getAddress();
+      encryptContext = {
+        contractAddress,
+        functionSelector: fn.fragment.selector,
+        userAddress,
+      };
+    }
+
+    await mapPodMethodArgumentsEncoded(args, this.net, encrypt, encryptContext);
     if (cb !== -1) args[cb].value = fee.callBackFee;
 
     const vals = args.map((a) => a.value);
@@ -247,6 +279,9 @@ export class PodContract {
       );
     }
 
+    const gasPrice =
+      c.gasPrice < INBOX_MIN_GAS_PRICE_WEI ? INBOX_MIN_GAS_PRICE_WEI : c.gasPrice;
+
     const inbox = new ethers.Contract(await this.inboxAddr(), [FEE_FN], this._provider);
     const fn = this.contract.getFunction(method);
     if (podArgs.length !== fn.fragment.inputs.length) {
@@ -261,7 +296,7 @@ export class PodContract {
       g ? c.callBackDataSize! : 0n,
       c.forwardGasLimit,
       g ? c.callBackGasLimit! : 0n,
-      c.gasPrice
+      gasPrice
     )) as [bigint, bigint];
 
     return { totalFee: remote + callback, remoteFee: remote, callBackFee: callback };

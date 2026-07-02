@@ -50,6 +50,8 @@ import {
 npm run ci:verify
 ```
 
+**Full-stack e2e** (live Sepolia + COTI testnet, requires `.env`): see [`examples/private-adder-e2e`](examples/private-adder-e2e/README.md).
+
 Publish flow:
 
 1. Bump version: `npm version patch|minor|major`
