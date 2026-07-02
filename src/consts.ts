@@ -16,7 +16,12 @@ export const COTI_TESTNET_DEFAULT_INBOX_ADDRESS = DEFAULT_INBOX_ADDRESS;
 /** Avalanche Fuji (43113) — EVM-side inbox. */
 export const FUJI_DEFAULT_INBOX_ADDRESS = DEFAULT_INBOX_ADDRESS;
 
-/** `chainId` as decimal string → default inbox for fee estimation / log filtering. */
+/**
+ * `chainId` as decimal string → default inbox for fee estimation / log filtering.
+ *
+ * Testnet entries only — mainnet deployments require explicit `PodSdkConfig.chains`
+ * or `PodContract` `inboxAddress` override.
+ */
 export const DEFAULT_INBOX_ADDRESS_BY_CHAIN_ID: Readonly<Record<string, string>> =
   Object.freeze({
     "11155111": SEPOLIA_DEFAULT_INBOX_ADDRESS,

@@ -1,10 +1,14 @@
 export {
   CotiPodCrypto,
   DataType,
+  isEncryptedType,
+  isEnectyptedType,
+  toPlainServiceType,
   type EncryptedUint64,
   type EncryptedScalar,
   type EncryptedString,
   type EncryptedValue,
+  type EncryptOptions,
 } from "./coti-pod-crypto.js";
 
 export {
@@ -32,10 +36,23 @@ export {
 } from "./consts.js";
 
 export {
+  EncryptionServiceError,
+  FeeEstimationError,
+  InboxConfigError,
+  PodSdkError,
+  RequestNotFoundError,
+  RequestTrackingCycleError,
+  WaitForRequestTimeoutError,
+} from "./errors.js";
+
+export {
   PodRequest,
   decodeInboxErrorMessage,
+  isRequestTrackingComplete,
   ERROR_CODE_ENCODE_FAILED,
   ERROR_CODE_EXECUTION_FAILED,
   type ExecutionError,
   type RequestTrackingResponse,
+  type WaitForRequestOptions,
+  type WaitForRequestUntil,
 } from "./pod-request.js";

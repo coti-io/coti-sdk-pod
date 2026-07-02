@@ -6,6 +6,12 @@
 
 import { ethers } from "ethers";
 import type { PodChainConfig, PodSdkConfig } from "./config.js";
+import {
+  PodSdkError,
+  RequestNotFoundError,
+  RequestTrackingCycleError,
+  WaitForRequestTimeoutError,
+} from "./errors.js";
 
 /**
  * Inbox error codes mirrored from `InboxBase.sol`.
@@ -39,6 +45,8 @@ export interface RequestTrackingResponse {
   requestId: string;
   /** `true` once a miner ingested this request on the target inbox. */
   minedOnTarget: boolean;
+  /** `true` once the target inbox marked the request as executed. */
+  executedOnTarget: boolean;
   isTwoWay: boolean;
   /** Tracking of the linked response request (two-way only), or `null` if not sent yet. */
   response: RequestTrackingResponse | null;
@@ -48,6 +56,20 @@ export interface RequestTrackingResponse {
   remoteGasLimit: bigint;
   /** Populated when the target-side encode or subcall failed. */
   execution: ExecutionError | null;
+}
+
+/** Terminal condition for {@link PodRequest.waitForRequest}. */
+export type WaitForRequestUntil = "mined" | "executed" | "complete";
+
+export interface WaitForRequestOptions {
+  /** Stop when this lifecycle stage is reached (default `"executed"`). */
+  until?: WaitForRequestUntil;
+  /** Poll interval in milliseconds (default 3_000). */
+  intervalMs?: number;
+  /** Maximum wait time in milliseconds (default 300_000). */
+  timeoutMs?: number;
+  /** Abort polling when this signal is aborted. */
+  signal?: AbortSignal;
 }
 
 const INBOX_TRACKING_ABI: ReadonlyArray<string> = [
@@ -131,13 +153,52 @@ export function decodeInboxErrorMessage(raw: string): string {
   return raw;
 }
 
+/** Whether `status` satisfies the requested {@link WaitForRequestUntil} stage. */
+export function isRequestTrackingComplete(
+  status: RequestTrackingResponse,
+  until: WaitForRequestUntil
+): boolean {
+  switch (until) {
+    case "mined":
+      return status.minedOnTarget;
+    case "executed":
+      return status.minedOnTarget && status.executedOnTarget;
+    case "complete":
+      if (!status.isTwoWay) {
+        return status.minedOnTarget && status.executedOnTarget;
+      }
+      return (
+        status.response !== null &&
+        status.response.minedOnTarget &&
+        status.response.executedOnTarget
+      );
+  }
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new PodSdkError("waitForRequest aborted"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new PodSdkError("waitForRequest aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /**
  * Polling-friendly client that fans out view calls across configured chains to
  * reconstruct the lifecycle of a cross-chain PoD request.
  *
- * The user is expected to re-call {@link trackRequest} every few seconds until
- * the fields they care about (`minedOnTarget`, `execution`, `response.minedOnTarget`, …)
- * reach the desired state.
+ * Prefer {@link waitForRequest} for blocking until a terminal state; use
+ * {@link trackRequest} when you manage polling yourself.
  *
  * @example
  * const config = {
@@ -147,7 +208,7 @@ export function decodeInboxErrorMessage(raw: string): string {
  *   ],
  * };
  * const tracker = new PodRequest(config);
- * const status = await tracker.trackRequest(11155111n, requestId);
+ * const status = await tracker.waitForRequest(11155111n, requestId, { until: "executed" });
  */
 export class PodRequest {
   private readonly chains: Map<string, PodChainConfig>;
@@ -192,6 +253,33 @@ export class PodRequest {
     return this._track(chainId, requestId, new Set());
   }
 
+  /**
+   * Poll {@link trackRequest} until the request reaches the requested lifecycle stage.
+   *
+   * @throws {@link WaitForRequestTimeoutError} when `timeoutMs` elapses first.
+   */
+  async waitForRequest(
+    chainId: number | bigint | string,
+    requestId: string,
+    options?: WaitForRequestOptions
+  ): Promise<RequestTrackingResponse> {
+    const until = options?.until ?? "executed";
+    const intervalMs = options?.intervalMs ?? 3_000;
+    const timeoutMs = options?.timeoutMs ?? 300_000;
+    const started = Date.now();
+
+    for (;;) {
+      const status = await this.trackRequest(chainId, requestId);
+      if (isRequestTrackingComplete(status, until)) return status;
+
+      if (Date.now() - started >= timeoutMs) {
+        throw new WaitForRequestTimeoutError(chainId, requestId, until, timeoutMs);
+      }
+
+      await sleep(intervalMs, options?.signal);
+    }
+  }
+
   private inboxFor(chainId: bigint | number | string): ethers.Contract | undefined {
     const key = String(BigInt(chainId));
     const cached = this.inboxCache.get(key);
@@ -220,16 +308,14 @@ export class PodRequest {
     const id = ethers.hexlify(requestId).toLowerCase();
     const seenKey = `${sourceKey}:${id}`;
     if (seen.has(seenKey)) {
-      throw new Error(`PodRequest: cycle detected while tracking ${id}`);
+      throw new RequestTrackingCycleError(id);
     }
     seen.add(seenKey);
 
     const req = await source.requests(id);
     const storedId = (req.requestId as string).toLowerCase();
     if (storedId === ZERO_REQUEST_ID) {
-      throw new Error(
-        `PodRequest: request ${id} not found on chain ${sourceKey}`
-      );
+      throw new RequestNotFoundError(sourceKey, id);
     }
 
     const sourceChainId = BigInt(sourceKey);
@@ -242,6 +328,7 @@ export class PodRequest {
     const target = this.inboxFor(targetChainId);
 
     let minedOnTarget = false;
+    let executedOnTarget = false;
     let execution: ExecutionError | null = null;
     let responseRequestId = ZERO_REQUEST_ID;
 
@@ -256,6 +343,9 @@ export class PodRequest {
 
       minedOnTarget =
         (incoming.requestId as string).toLowerCase() !== ZERO_REQUEST_ID;
+      if (minedOnTarget) {
+        executedOnTarget = Boolean(incoming.executed);
+      }
 
       const errStoredId = (err.requestId as string).toLowerCase();
       if (errStoredId !== ZERO_REQUEST_ID) {
@@ -284,6 +374,7 @@ export class PodRequest {
       targetChainId,
       requestId: id,
       minedOnTarget,
+      executedOnTarget,
       isTwoWay,
       response,
       localGasLimit,

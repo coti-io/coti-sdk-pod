@@ -6,11 +6,14 @@
 
 import { decryptUint, decryptString } from "@coti-io/coti-sdk-typescript";
 import type { ctString } from "@coti-io/coti-sdk-typescript";
+import { EncryptionServiceError } from "./errors.js";
 
 const ENCRYPTION_SERVICE: Record<string, string> = {
   testnet: "https://fullnode.testnet.coti.io/pod-encryption",
   mainnet: "https://pod-encryption-service-mainnet.coti.io",
 };
+
+const DEFAULT_ENCRYPT_TIMEOUT_MS = 30_000;
 
 /** Data types supported for encryption/decryption (matches Solidity IT_* / MpcDataType). */
 export enum DataType {
@@ -50,12 +53,51 @@ export type EncryptedValue = EncryptedScalar | EncryptedString;
 /** Legacy alias for EncryptedScalar (uint64). */
 export type EncryptedUint64 = EncryptedScalar;
 
-function toServiceType(dataType: DataType): string {
-  return dataType;
+export interface EncryptOptions {
+  /** Abort the HTTP request when the signal is aborted. */
+  signal?: AbortSignal;
+  /** Request timeout in milliseconds (default 30_000). */
+  timeoutMs?: number;
 }
 
-export function isEnectyptedType(dataType: DataType): boolean {
+/** Whether the Solidity-side type is an encrypted input (`it*`). */
+export function isEncryptedType(dataType: DataType): boolean {
   return dataType.startsWith("it");
+}
+
+/**
+ * @deprecated Use {@link isEncryptedType}. Kept for backward compatibility.
+ */
+export const isEnectyptedType = isEncryptedType;
+
+/** Map Solidity `it*` names to plain names expected by the encryption HTTP API. */
+export function toPlainServiceType(dataType: DataType): string {
+  if (!isEncryptedType(dataType)) return dataType;
+  if (dataType === DataType.itString) return DataType.String;
+  if (dataType === DataType.itBool) return DataType.Bool;
+  return dataType.slice(2).toLowerCase();
+}
+
+function mergeAbortSignals(
+  signal: AbortSignal | undefined,
+  timeoutMs: number
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  const onAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeout);
+      if (signal) signal.removeEventListener("abort", onAbort);
+    },
+  };
 }
 
 export class CotiPodCrypto {
@@ -63,33 +105,58 @@ export class CotiPodCrypto {
    * Encrypt a value via the PoD encryption service.
    * @param value - Plaintext (numeric string, "true"/"false", or string for String type)
    * @param network - "testnet" or "mainnet", or full service URL
-   * @param dataType - Type of the value
+   * @param dataType - Type of the value (`it*` types are normalized for the HTTP API)
    */
   static async encrypt(
     value: string,
     network: "testnet" | "mainnet" | string,
-    dataType: DataType = DataType.Uint64
+    dataType: DataType = DataType.Uint64,
+    options?: EncryptOptions
   ): Promise<EncryptedValue> {
     const baseUrl = ENCRYPTION_SERVICE[network] ?? network;
     const url = `${baseUrl.replace(/\/$/, "")}/buildEncryptedInputs`;
-    const body = { dataType: toServiceType(dataType), value };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const body = { dataType: toPlainServiceType(dataType), value };
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_ENCRYPT_TIMEOUT_MS;
+    const { signal, cleanup } = mergeAbortSignals(options?.signal, timeoutMs);
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (e: unknown) {
+      cleanup();
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new EncryptionServiceError(
+          `encryption request timed out after ${timeoutMs}ms`,
+          { cause: e }
+        );
+      }
+      throw new EncryptionServiceError("encryption request failed", { cause: e });
+    } finally {
+      cleanup();
+    }
+
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Encryption service error: ${text}`);
+      throw new EncryptionServiceError(`encryption service error: ${text}`, {
+        status: res.status,
+        responseBody: text,
+      });
     }
-    const data = (await res.json()) as Record<string, unknown>;
 
-    if (dataType === DataType.String) {
+    const data = (await res.json()) as Record<string, unknown>;
+    const plainType = toPlainServiceType(dataType);
+
+    if (plainType === DataType.String) {
       const ct = data.ciphertext as { value?: string[] } | undefined;
       const sig = data.signature as string[] | undefined;
       if (!ct?.value || !Array.isArray(sig)) {
-        throw new Error(
-          "Encryption response for string missing ciphertext.value or signature array"
+        throw new EncryptionServiceError(
+          "encryption response for string missing ciphertext.value or signature array"
         );
       }
       return { ciphertext: { value: ct.value.map(String) }, signature: sig };
@@ -99,7 +166,9 @@ export class CotiPodCrypto {
       (data as { cipherText?: string }).cipherText) as string | bigint | undefined;
     const signature = data.signature as string | undefined;
     if (ciphertext == null || signature == null) {
-      throw new Error("Encryption response missing ciphertext or signature");
+      throw new EncryptionServiceError(
+        "encryption response missing ciphertext or signature"
+      );
     }
     return { ciphertext, signature: String(signature) };
   }
@@ -116,7 +185,7 @@ export class CotiPodCrypto {
     const key = aesKey.trim();
     if (!key) throw new Error("AES key is required");
 
-    if (dataType === DataType.String) {
+    if (dataType === DataType.String || dataType === DataType.itString) {
       let ct: ctString | Record<string, unknown>;
       if (typeof ciphertext === "string") {
         try {
@@ -134,12 +203,18 @@ export class CotiPodCrypto {
     }
 
     const raw = (typeof ciphertext === "string" ? ciphertext : "").trim();
-    if (!raw || raw === "0x" || raw === "0x0") return dataType === DataType.Bool ? "false" : "0";
+    if (!raw || raw === "0x" || raw === "0x0") {
+      return dataType === DataType.Bool || dataType === DataType.itBool ? "false" : "0";
+    }
     const big = BigInt(raw);
-    if (big === 0n) return dataType === DataType.Bool ? "false" : "0";
+    if (big === 0n) {
+      return dataType === DataType.Bool || dataType === DataType.itBool ? "false" : "0";
+    }
 
     const decrypted = decryptUint(big, key);
-    if (dataType === DataType.Bool) return decrypted === 1n ? "true" : "false";
+    if (dataType === DataType.Bool || dataType === DataType.itBool) {
+      return decrypted === 1n ? "true" : "false";
+    }
     return decrypted.toString();
   }
 }
