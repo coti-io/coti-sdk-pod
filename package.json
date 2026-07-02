@@ -47,12 +47,12 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@coti-io/coti-sdk-typescript": "^1.0.0",
-    "ethers": "^6.0.0"
+    "@coti-io/coti-sdk-typescript": "^1.0.8",
+    "ethers": "^6.17.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "vitest": "^2.0.0"
+    "vitest": "^3.2.6"
   },
   "repository": {
     "type": "git",
