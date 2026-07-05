@@ -1,8 +1,14 @@
 import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
-import { loadEnv } from "./lib/env.ts";
+import "@nomicfoundation/hardhat-ethers";
+import dotenv from "dotenv";
 
-const env = loadEnv();
+dotenv.config();
+
+function sepoliaAccounts(): string[] {
+  const raw = process.env.SEPOLIA_PRIVATE_KEY?.trim();
+  if (!raw) return [];
+  return [raw.startsWith("0x") ? raw : `0x${raw}`];
+}
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -13,9 +19,9 @@ const config: HardhatUserConfig = {
   },
   networks: {
     sepolia: {
-      url: env.sepoliaRpcUrl ?? "http://127.0.0.1:8545",
+      url: process.env.SEPOLIA_RPC_URL?.trim() ?? "http://127.0.0.1:8545",
       chainId: 11155111,
-      accounts: env.sepoliaPrivateKey ? [env.sepoliaPrivateKey] : [],
+      accounts: sepoliaAccounts(),
     },
   },
 };
