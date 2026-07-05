@@ -8,7 +8,7 @@
  * `ct*` hex you pass to `CotiPodCrypto.decrypt` after onboarding/MPC. We therefore do not
  * assert encrypt→decrypt round-trip against the encryption service here.
  *
- * Optional `.env`: see `.env.example` (`POD_TEST_NETWORK`, `POD_ENCRYPTION_SERVICE_URL`, RPC URLs).
+ * Optional `.env`: see `.env.example` (`POD_TEST_NETWORK`, `POD_ENCRYPTION_SERVICE_URL`, `SEPOLIA_RPC_URL`, `COTI_TESTNET_RPC_URL`).
  */
 
 import { describe, it, expect } from "vitest";

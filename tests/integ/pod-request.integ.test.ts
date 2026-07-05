@@ -2,7 +2,7 @@
  * Integration test for `PodRequest.trackRequest` against live Sepolia + Coti
  * Testnet RPCs.
  *
- * Requires `.env` with `POD_TEST_RPC_URL` (Sepolia) and `POD_COTI_TESTNET_RPC_URL`.
+ * Requires `SEPOLIA_RPC_URL` and `COTI_TESTNET_RPC_URL` (GitHub `integration` environment).
  * Skips automatically when either is missing.
  *
  * Run: `npm run test:integ -- -t "PodRequest"`.

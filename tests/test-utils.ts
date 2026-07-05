@@ -48,7 +48,7 @@ const MAINNET_BASE = "https://pod-encryption-service-mainnet.coti.io";
  * Initialise shared integration-test context (idempotent).
  *
  * See `.env.example` for variables: `POD_TEST_NETWORK`, `POD_ENCRYPTION_SERVICE_URL`,
- * `POD_TEST_RPC_URL`, `POD_COTI_TESTNET_RPC_URL`.
+ * `SEPOLIA_RPC_URL`, `COTI_TESTNET_RPC_URL` (same names as the GitHub `integration` environment).
  */
 export function initTestContext(): TestContext {
   if (cachedContext) return cachedContext;
@@ -63,9 +63,8 @@ export function initTestContext(): TestContext {
     (network === "mainnet" ? MAINNET_BASE : TESTNET_BASE)
   ).replace(/\/$/, "");
 
-  const rpcUrl = process.env.POD_TEST_RPC_URL?.trim() || undefined;
-  const cotiTestnetRpcUrl =
-    process.env.POD_COTI_TESTNET_RPC_URL?.trim() || undefined;
+  const rpcUrl = process.env.SEPOLIA_RPC_URL?.trim() || undefined;
+  const cotiTestnetRpcUrl = process.env.COTI_TESTNET_RPC_URL?.trim() || undefined;
 
   cachedContext = {
     network,
