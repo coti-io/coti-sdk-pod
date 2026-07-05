@@ -31,3 +31,26 @@ jobs:
 
       - name: Verify package (build, unit tests, pack)
         run: npm run ci:verify
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: package
+    environment: integration
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.15.1"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        env:
+          SEPOLIA_RPC_URL: ${{ vars.SEPOLIA_RPC_URL }}
+          COTI_TESTNET_RPC_URL: ${{ vars.COTI_TESTNET_RPC_URL }}
+        run: npm run test:integ

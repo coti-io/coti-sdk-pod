@@ -11,6 +11,7 @@ permissions:
 jobs:
   private-adder-e2e:
     runs-on: ubuntu-latest
+    environment: integration
 
     steps:
       - uses: actions/checkout@v4
@@ -31,9 +32,9 @@ jobs:
       - name: Run e2e example
         working-directory: examples/private-adder-e2e
         env:
-          SEPOLIA_RPC_URL: ${{ SEPOLIA_RPC_URL }}
-          COTI_TESTNET_RPC_URL: ${{ COTI_TESTNET_RPC_URL }}
-          SEPOLIA_PRIVATE_KEY: ${{ SEPOLIA_PRIVATE_KEY }}
-          POD_ACCOUNT_AES_KEY: ${{ POD_ACCOUNT_AES_KEY }}
+          SEPOLIA_RPC_URL: ${{ vars.SEPOLIA_RPC_URL }}
+          COTI_TESTNET_RPC_URL: ${{ vars.COTI_TESTNET_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          POD_ACCOUNT_AES_KEY: ${{ secrets.POD_ACCOUNT_AES_KEY }}
           DEPLOY_ON_MISSING: "true"
         run: npm test
