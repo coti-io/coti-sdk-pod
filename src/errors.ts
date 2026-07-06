@@ -9,6 +9,20 @@ export class PodSdkError extends Error {
   }
 }
 
+/** Encryption service URL is not on the SDK allowlist. */
+export class EncryptionUrlNotAllowedError extends PodSdkError {
+  readonly url: string;
+
+  constructor(url: string, detail?: string) {
+    const suffix = detail ? `: ${detail}` : "";
+    super(`encryption service URL not allowed${suffix}: ${url}`);
+    this.url = url;
+  }
+}
+
+/** IT signature from the encryption service failed client-side verification. */
+export class ItSignatureVerificationError extends PodSdkError {}
+
 /** HTTP encryption service returned a non-OK response or malformed payload. */
 export class EncryptionServiceError extends PodSdkError {
   readonly status?: number;

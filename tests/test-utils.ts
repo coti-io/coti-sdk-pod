@@ -5,6 +5,11 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import {
+  OFFICIAL_ENCRYPTION_SERVICE_URLS,
+  normalizeEncryptionServiceUrl,
+  type EncryptOptions,
+} from "@coti/pod-sdk";
 
 let dotenvLoaded = false;
 let cachedContext: TestContext | null = null;
@@ -41,8 +46,8 @@ export type TestContext = {
   cotiTestnetRpcUrl: string | undefined;
 };
 
-const TESTNET_BASE = "https://fullnode.testnet.coti.io/pod-encryption";
-const MAINNET_BASE = "https://pod-encryption-service-mainnet.coti.io";
+const TESTNET_BASE = OFFICIAL_ENCRYPTION_SERVICE_URLS.testnet;
+const MAINNET_BASE = OFFICIAL_ENCRYPTION_SERVICE_URLS.mainnet;
 
 /**
  * Initialise shared integration-test context (idempotent).
@@ -73,4 +78,20 @@ export function initTestContext(): TestContext {
     cotiTestnetRpcUrl,
   };
   return cachedContext;
+}
+
+/** Security options for live encryption HTTP tests (trusts env override URL when set). */
+export function encryptionOptionsForInteg(): Pick<
+  EncryptOptions,
+  "trustedEncryptionServiceUrls"
+> {
+  const ctx = initTestContext();
+  const envOverride = process.env.POD_ENCRYPTION_SERVICE_URL?.trim();
+  if (!envOverride) return {};
+  const normalized = normalizeEncryptionServiceUrl(ctx.encryptionBaseUrl);
+  const official = new Set(
+    Object.values(OFFICIAL_ENCRYPTION_SERVICE_URLS).map(normalizeEncryptionServiceUrl)
+  );
+  if (official.has(normalized)) return {};
+  return { trustedEncryptionServiceUrls: [normalized] };
 }

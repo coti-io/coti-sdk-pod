@@ -13,6 +13,17 @@ export {
 } from "./coti-pod-crypto.js";
 
 export {
+  OFFICIAL_ENCRYPTION_SERVICE_URLS,
+  normalizeEncryptionServiceUrl,
+  resolveEncryptionServiceBaseUrl,
+  hasCompleteEncryptContext,
+  verifyItEncryptedValue,
+  shouldVerifyItSignature,
+  type EncryptionServiceSecurityOptions,
+  type ItVerificationOptions,
+} from "./encryption-security.js";
+
+export {
   type PodChainConfig,
   type PodSdkConfig,
 } from "./config.js";
@@ -26,6 +37,7 @@ export {
   type PodFeeEstimate,
   type PodFeeEstimationConfig,
   type PodMethodArgument,
+  type PodMethodSecurityOptions,
 } from "./pod-method-call.js";
 
 export {
@@ -38,8 +50,10 @@ export {
 
 export {
   EncryptionServiceError,
+  EncryptionUrlNotAllowedError,
   FeeEstimationError,
   InboxConfigError,
+  ItSignatureVerificationError,
   PodSdkError,
   RequestNotFoundError,
   RequestTrackingCycleError,

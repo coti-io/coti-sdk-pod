@@ -13,6 +13,13 @@ import {
 } from "./coti-pod-crypto.js";
 import { DEFAULT_INBOX_ADDRESS_BY_CHAIN_ID } from "./consts.js";
 import type { PodSdkConfig } from "./config.js";
+import {
+  shouldVerifyItSignature,
+  verifyItEncryptedValue,
+  resolveEncryptionServiceBaseUrl,
+  type EncryptionServiceSecurityOptions,
+  type ItVerificationOptions,
+} from "./encryption-security.js";
 import { FeeEstimationError, InboxConfigError } from "./errors.js";
 
 export interface PodMethodArgument {
@@ -36,7 +43,7 @@ export interface PodFeeEstimationConfig {
   callBackDataSize?: bigint;
 }
 
-export interface PodContractOptions {
+export interface PodContractOptions extends EncryptionServiceSecurityOptions, ItVerificationOptions {
   /**
    * Shared SDK config. When provided, the connected chain's `inboxAddress` and
    * `encryptionNetwork` come from here (unless overridden below).
@@ -47,6 +54,9 @@ export interface PodContractOptions {
   /** Override encryption network (wins over `config.encryptionNetwork`). */
   encryptionNetwork?: "testnet" | "mainnet" | string;
 }
+
+export type PodMethodSecurityOptions = EncryptionServiceSecurityOptions &
+  ItVerificationOptions;
 
 const FEE_FN =
   "function calculateTwoWayFeeRequiredInLocalToken(uint256,uint256,uint256,uint256,uint256) view returns (uint256,uint256)";
@@ -128,15 +138,32 @@ async function resolveArg(
   arg: PodMethodArgument,
   net: string,
   encrypt: boolean,
-  context?: EncryptContext
+  context?: EncryptContext,
+  security?: PodMethodSecurityOptions
 ): Promise<unknown> {
   if (typeof arg.value !== "string") {
     throw new Error("argument value must be a string before resolve");
   }
   const { type, value } = arg;
   if (!isEncryptedType(type)) return plainCoerce(type, value);
-  if (encrypt) return itTuple(type, await CotiPodCrypto.encrypt(value, net, type, context));
-  return itTuple(type, parseItJson(value));
+
+  const encryptOptions = security
+    ? {
+        ...security,
+        ...context,
+      }
+    : context;
+
+  if (encrypt) {
+    const enc = await CotiPodCrypto.encrypt(value, net, type, encryptOptions);
+    return itTuple(type, enc);
+  }
+
+  const parsed = parseItJson(value);
+  if (shouldVerifyItSignature(context, security)) {
+    verifyItEncryptedValue(type, parsed, context);
+  }
+  return itTuple(type, parsed);
 }
 
 export function estimateForwardDataSizeFromArguments(args: PodMethodArgument[]): bigint {
@@ -152,10 +179,12 @@ export async function mapPodMethodArgumentsEncoded(
   args: PodMethodArgument[],
   encryptionNetwork: string,
   encrypt: boolean,
-  context?: EncryptContext
+  context?: EncryptContext,
+  security?: PodMethodSecurityOptions
 ): Promise<void> {
+  const resolvedNetwork = resolveEncryptionServiceBaseUrl(encryptionNetwork, security);
   for (const a of args) {
-    a.value = await resolveArg(a, encryptionNetwork, encrypt, context);
+    a.value = await resolveArg(a, resolvedNetwork, encrypt, context, security);
   }
 }
 
@@ -163,10 +192,11 @@ export async function encodePodMethodArguments(
   args: PodMethodArgument[],
   encryptionNetwork: string,
   encrypt: boolean,
-  context?: EncryptContext
+  context?: EncryptContext,
+  security?: PodMethodSecurityOptions
 ): Promise<PodMethodArgument[]> {
   const copy = clonePodMethodArguments(args);
-  await mapPodMethodArgumentsEncoded(copy, encryptionNetwork, encrypt, context);
+  await mapPodMethodArgumentsEncoded(copy, encryptionNetwork, encrypt, context, security);
   return copy;
 }
 
@@ -176,6 +206,7 @@ export class PodContract {
   private readonly net: string;
   private readonly _provider: ethers.Provider;
   private readonly config?: PodSdkConfig;
+  private readonly security: PodMethodSecurityOptions;
 
   constructor(addr: string, abi: ethers.InterfaceAbi, runner: ethers.ContractRunner, opt?: PodContractOptions) {
     this.contract = new ethers.Contract(addr, abi, runner);
@@ -183,6 +214,15 @@ export class PodContract {
     this.inboxOverride = opt?.inboxAddress;
     this.net = opt?.encryptionNetwork ?? this.config?.encryptionNetwork ?? "testnet";
     this._provider = providerFromRunner(runner);
+    this.security = {
+      trustedEncryptionServiceUrls: [
+        ...(this.config?.trustedEncryptionServiceUrls ?? []),
+        ...(opt?.trustedEncryptionServiceUrls ?? []),
+      ],
+      allowUnlistedEncryptionUrl:
+        opt?.allowUnlistedEncryptionUrl ?? this.config?.allowUnlistedEncryptionUrl,
+      verifyItSignature: opt?.verifyItSignature ?? this.config?.verifyItSignature,
+    };
   }
 
   private async inboxAddr(): Promise<string> {
@@ -241,7 +281,8 @@ export class PodContract {
     const cb = args.findIndex((a) => a.isCallBackFee);
 
     let encryptContext: EncryptContext | undefined;
-    if (encrypt) {
+    const hasEncryptedArgs = args.some((a) => isEncryptedType(a.type));
+    if (encrypt || hasEncryptedArgs) {
       const contractAddress = await this.contract.getAddress();
       const userAddress = await (
         this.contract.runner as ethers.Signer
@@ -253,7 +294,13 @@ export class PodContract {
       };
     }
 
-    await mapPodMethodArgumentsEncoded(args, this.net, encrypt, encryptContext);
+    await mapPodMethodArgumentsEncoded(
+      args,
+      this.net,
+      encrypt,
+      encryptContext,
+      this.security
+    );
     if (cb !== -1) args[cb].value = fee.callBackFee;
 
     const vals = args.map((a) => a.value);

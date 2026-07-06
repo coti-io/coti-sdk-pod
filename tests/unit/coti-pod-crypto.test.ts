@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  CotiPodCrypto,
   DataType,
   isEncryptedType,
   toPlainServiceType,
-  CotiPodCrypto,
 } from "@coti/pod-sdk";
 
 describe("isEncryptedType", () => {
