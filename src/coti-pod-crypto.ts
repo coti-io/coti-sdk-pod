@@ -14,8 +14,6 @@ import type { ctString } from "@coti-io/coti-sdk-typescript";
 import { EncryptionServiceError } from "./errors.js";
 import {
   resolveEncryptionServiceBaseUrl,
-  shouldVerifyItSignature,
-  verifyItEncryptedValue,
   type EncryptionServiceSecurityOptions,
   type ItVerificationOptions,
 } from "./encryption-security.js";
@@ -197,19 +195,6 @@ export class CotiPodCrypto {
         );
       }
       encrypted = { ciphertext, signature: String(signature) };
-    }
-
-    const context: EncryptContext | undefined =
-      options?.contractAddress || options?.functionSelector || options?.userAddress
-        ? {
-            contractAddress: options?.contractAddress,
-            functionSelector: options?.functionSelector,
-            userAddress: options?.userAddress,
-          }
-        : undefined;
-
-    if (shouldVerifyItSignature(context, options)) {
-      verifyItEncryptedValue(dataType, encrypted, context);
     }
 
     return encrypted;

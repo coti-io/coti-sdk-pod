@@ -26,6 +26,6 @@ export interface PodSdkConfig {
    * When true, allows any HTTPS encryption service URL (not recommended for production).
    */
   allowUnlistedEncryptionUrl?: boolean;
-  /** When false, skips client-side IT signature verification before contract calls. */
+  /** When false, skips client-side IT signature verification on pre-encrypted JSON args. */
   verifyItSignature?: boolean;
 }
