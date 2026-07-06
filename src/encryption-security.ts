@@ -35,8 +35,9 @@ export interface EncryptionServiceSecurityOptions {
 
 export interface ItVerificationOptions {
   /**
-   * Verify IT signatures from the encryption service before use (default true when
-   * {@link EncryptContext} is complete).
+   * Verify user-signed IT payloads parsed from JSON before contract calls (default
+   * true when {@link EncryptContext} is complete). Does not apply to ciphertext
+   * returned by the HTTP encryption service — those signatures use the service key.
    */
   verifyItSignature?: boolean;
 }
@@ -189,9 +190,9 @@ function verifyItUint256Signature(
 }
 
 /**
- * Verify that encrypted inputs were signed by `context.userAddress` for the
- * target contract call. Matches the PoD IT signing scheme used by the encryption
- * service and `@coti-io/coti-sdk-typescript`.
+ * Verify that client-side IT JSON was signed by `context.userAddress` for the
+ * target contract call (e.g. from `buildInputText`). Not used for HTTP
+ * `buildEncryptedInputs` responses, which are signed by the encryption service.
  */
 export function verifyItEncryptedValue(
   dataType: DataType,
