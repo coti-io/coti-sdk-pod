@@ -54,3 +54,35 @@ jobs:
           SEPOLIA_RPC_URL: ${{ vars.SEPOLIA_RPC_URL }}
           COTI_TESTNET_RPC_URL: ${{ vars.COTI_TESTNET_RPC_URL }}
         run: npm run test:integ
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: package
+    environment: integration
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.15.1"
+          cache: npm
+
+      - name: Install SDK dependencies
+        run: npm ci
+
+      - name: Install example dependencies
+        working-directory: examples/private-adder-e2e
+        run: npm ci
+
+      - name: Run PrivateAdder e2e example
+        working-directory: examples/private-adder-e2e
+        env:
+          SEPOLIA_RPC_URL: ${{ vars.SEPOLIA_RPC_URL }}
+          COTI_TESTNET_RPC_URL: ${{ vars.COTI_TESTNET_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          POD_ACCOUNT_AES_KEY: ${{ secrets.POD_ACCOUNT_AES_KEY }}
+          DEPLOY_ON_MISSING: "false"
+        run: npm test
