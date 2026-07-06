@@ -6,7 +6,7 @@ import {
   mapPodMethodArgumentsEncoded,
   EncryptionUrlNotAllowedError,
   type PodMethodArgument,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 
 describe("estimateForwardDataSizeFromArguments", () => {
   it("includes a base size plus encoded string lengths", () => {

@@ -9,7 +9,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@coti/pod-sdk": path.resolve(__dirname, "../../src/index.ts"),
+      "@coti-io/pod-sdk": path.resolve(__dirname, "../../src/index.ts"),
     },
   },
 });

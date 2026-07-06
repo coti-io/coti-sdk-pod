@@ -1,4 +1,4 @@
-# @coti/pod-sdk
+# @coti-io/pod-sdk
 
 TypeScript SDK for building privacy dApps on EVM with COTI Privacy on Demand (PoD): encryption/decryption helpers, fee-aware contract calls, and cross-chain request tracking.
 
@@ -7,7 +7,7 @@ TypeScript SDK for building privacy dApps on EVM with COTI Privacy on Demand (Po
 From npm:
 
 ```bash
-npm install @coti/pod-sdk ethers
+npm install @coti-io/pod-sdk ethers
 ```
 
 `ethers` v6 is a **peer dependency** — install it in your app alongside this package.
@@ -41,7 +41,7 @@ import {
   SEPOLIA_DEFAULT_INBOX_ADDRESS,
   COTI_TESTNET_DEFAULT_INBOX_ADDRESS,
   type PodSdkConfig,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 ```
 
 ## Package and release

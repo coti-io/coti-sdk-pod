@@ -4,7 +4,7 @@ import {
   DataType,
   isEncryptedType,
   toPlainServiceType,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 
 describe("isEncryptedType", () => {
   it("returns true for it* Solidity types", () => {

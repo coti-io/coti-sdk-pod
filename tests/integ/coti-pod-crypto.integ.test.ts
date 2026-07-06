@@ -17,7 +17,7 @@ import {
   DataType,
   type EncryptedString,
   type EncryptedScalar,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 import { initTestContext, encryptionOptionsForInteg, type TestContext } from "../test-utils.js";
 
 const ctx: TestContext = initTestContext();

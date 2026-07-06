@@ -7,7 +7,7 @@ import {
   OFFICIAL_ENCRYPTION_SERVICE_URLS,
   resolveEncryptionServiceBaseUrl,
   verifyItEncryptedValue,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 
 describe("resolveEncryptionServiceBaseUrl", () => {
   it("accepts testnet and mainnet keywords", () => {

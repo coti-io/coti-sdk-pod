@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { buildInputText } from "@coti-io/coti-sdk-typescript";
-import { DataType, type PodMethodArgument } from "@coti/pod-sdk";
+import { DataType, type PodMethodArgument } from "@coti-io/pod-sdk";
 
 const ADD_SELECTOR = new ethers.Interface([
   "function add((uint256,bytes),(uint256,bytes),uint256) payable returns (bytes32)",

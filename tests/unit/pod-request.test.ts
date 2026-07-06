@@ -4,7 +4,7 @@ import {
   isRequestTrackingComplete,
   WaitForRequestTimeoutError,
   type RequestTrackingResponse,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 
 function baseStatus(
   overrides: Partial<RequestTrackingResponse> = {}
@@ -75,7 +75,7 @@ describe("isRequestTrackingComplete", () => {
 
 describe("decodeInboxErrorMessage", () => {
   it("decodes Error(string) payloads", async () => {
-    const { decodeInboxErrorMessage } = await import("@coti/pod-sdk");
+    const { decodeInboxErrorMessage } = await import("@coti-io/pod-sdk");
     const { ethers } = await import("ethers");
     const encoded = ethers.AbiCoder.defaultAbiCoder().encode(["string"], ["boom"]);
     const raw = "0x08c379a0" + encoded.slice(2);
@@ -124,7 +124,7 @@ describe("PodRequest.waitForRequest", () => {
 
 describe("PodRequest.trackRequest errors", () => {
   it("throws RequestNotFoundError for missing requests", async () => {
-    const { RequestNotFoundError } = await import("@coti/pod-sdk");
+    const { RequestNotFoundError } = await import("@coti-io/pod-sdk");
     const { ethers } = await import("ethers");
 
     const tracker = new PodRequest({

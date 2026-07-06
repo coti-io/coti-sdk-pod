@@ -38,7 +38,7 @@ calculateTwoWayFeeRequiredInLocalToken(
 
 Returns remote and callback budgets in **local wei**.
 
-**TypeScript** (`@coti/pod-sdk`):
+**TypeScript** (`@coti-io/pod-sdk`):
 
 ```typescript
 const pod = new PodContract(appAddress, abi, signer, { config });

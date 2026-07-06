@@ -15,7 +15,7 @@ import {
   COTI_TESTNET_DEFAULT_INBOX_ADDRESS,
   type PodSdkConfig,
   type RequestTrackingResponse,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 import { initTestContext } from "../test-utils.js";
 
 const SEPOLIA_CHAIN_ID = 11155111n;

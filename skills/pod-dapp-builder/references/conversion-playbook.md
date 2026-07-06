@@ -100,7 +100,7 @@ Full walkthrough: [tutorial-private-adder-sepolia.md](https://github.com/coti-io
 ## TypeScript client flow
 
 ```typescript
-import { PodContract, PodRequest, CotiPodCrypto, DataType, type PodSdkConfig } from "@coti/pod-sdk";
+import { PodContract, PodRequest, CotiPodCrypto, DataType, type PodSdkConfig } from "@coti-io/pod-sdk";
 
 const tracker = new PodRequest(config);
 const pod = new PodContract(appAddress, abi, signer, { config });

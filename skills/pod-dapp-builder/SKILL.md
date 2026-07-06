@@ -1,6 +1,6 @@
 ---
 name: pod-dapp-builder
-description: Build new PoD (privacy-on-demand) applications and migrate existing non-private Solidity applications to COTI async privacy architecture. Use when working on contracts that must introduce `it*`, `ct*`, or `gt*` encrypted types; split logic between EVM and COTI sides; add Inbox one-way/two-way messaging; implement callback-based async flows; budget execution/callback fees; integrate `@coti/pod-sdk` (`CotiPodCrypto`, `PodContract`, `PodRequest`); or refactor synchronous contract behavior into request/response state machines.
+description: Build new PoD (privacy-on-demand) applications and migrate existing non-private Solidity applications to COTI async privacy architecture. Use when working on contracts that must introduce `it*`, `ct*`, or `gt*` encrypted types; split logic between EVM and COTI sides; add Inbox one-way/two-way messaging; implement callback-based async flows; budget execution/callback fees; integrate `@coti-io/pod-sdk` (`CotiPodCrypto`, `PodContract`, `PodRequest`); or refactor synchronous contract behavior into request/response state machines.
 ---
 
 # PoD dApp Builder
@@ -20,11 +20,11 @@ Implement or refactor contracts into PoD architecture with correct encrypted typ
 
 | Package | Repository | Use for |
 | --- | --- | --- |
-| `@coti/pod-sdk` | [coti-io/coti-sdk-pod](https://github.com/coti-io/coti-sdk-pod) | TypeScript only: `CotiPodCrypto`, `PodContract`, `PodRequest`, `PodSdkConfig` |
+| `@coti-io/pod-sdk` | [coti-io/coti-sdk-pod](https://github.com/coti-io/coti-sdk-pod) | TypeScript only: `CotiPodCrypto`, `PodContract`, `PodRequest`, `PodSdkConfig` |
 | `@coti-io/coti-contracts` | [coti-io/coti-contracts](https://github.com/coti-io/coti-contracts) | `PodLib`, `PodUser*`, `IInbox` interface, `MpcAbiCodec`, examples, tokens |
 | `@coti-io/coti-pod-inbox-contracts` | [coti-io/coti-pod-inbox-contracts](https://github.com/coti-io/coti-pod-inbox-contracts) | Inbox **implementation**, `InboxFeeManager`, `InboxMiner`, `PriceOracle` |
 
-Solidity imports always use `@coti-io/coti-contracts/contracts/pod/...` — never `@coti/pod-sdk/contracts/...` (the npm SDK ships TypeScript only).
+Solidity imports always use `@coti-io/coti-contracts/contracts/pod/...` — never `@coti-io/pod-sdk/contracts/...` (the npm SDK ships TypeScript only).
 
 ## Documentation map (one canonical page per topic)
 
@@ -36,7 +36,7 @@ Solidity imports always use `@coti-io/coti-contracts/contracts/pod/...` — neve
 | PodLib catalog & presets | [reference-podlib-and-primitives.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/reference-podlib-and-primitives.md) |
 | Production checklist | [contract-patterns-checklist.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/contract-patterns-checklist.md) |
 | Shipped examples | [reference-examples-and-contracts.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/reference-examples-and-contracts.md) |
-| `@coti/pod-sdk` API | [typescript-pod-sdk.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/typescript-pod-sdk.md) |
+| `@coti-io/pod-sdk` API | [typescript-pod-sdk.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/typescript-pod-sdk.md) |
 | Account AES key onboarding | [account-onboarding-aes-key.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/account-onboarding-aes-key.md) |
 | Low-level crypto (`recoverUserKey`, etc.) | [coti-typescript-sdk-for-pod.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/coti-typescript-sdk-for-pod.md) |
 | Async UX | [async-private-operations.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/async-private-operations.md) |
@@ -78,7 +78,7 @@ From [`PodNetworkConstants.sol`](https://github.com/coti-io/coti-contracts/blob/
 
 MPC executor (COTI testnet): `0xC76aaE4F3810fBBd5d96b92DEFeBE0034405Ad9c`
 
-SDK defaults (`@coti/pod-sdk` ≥ 0.1.2) align with these values.
+SDK defaults (`@coti-io/pod-sdk` ≥ 0.1.2) align with these values.
 
 ## Shipped examples (`@coti-io/coti-contracts`)
 
@@ -91,10 +91,10 @@ Use only examples that exist in `contracts/pod/examples/`:
 
 Do **not** reference removed/stale examples (`Millionaire.sol`, `PErc20.sol`, `PodTest*.sol`) unless reintroduced in the repo. For custom token patterns see `contracts/pod/token/` and the [investor cookbook](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/cookbook-private-investor-allocations.md).
 
-## TypeScript client (`@coti/pod-sdk`)
+## TypeScript client (`@coti-io/pod-sdk`)
 
 ```bash
-npm install @coti/pod-sdk ethers
+npm install @coti-io/pod-sdk ethers
 ```
 
 | Class | Role |
@@ -104,7 +104,7 @@ npm install @coti/pod-sdk ethers
 | `PodRequest` | `trackRequest(chainId, requestId)` for cross-chain async UX |
 | `PodSdkConfig` | Shared JSON config (chains, inbox addresses, RPCs, encryption network) |
 
-Account key recovery is in `@coti-io/coti-sdk-typescript` — not `@coti/pod-sdk`.
+Account key recovery is in `@coti-io/coti-sdk-typescript` — not `@coti-io/pod-sdk`.
 
 ## Delivery checklist
 

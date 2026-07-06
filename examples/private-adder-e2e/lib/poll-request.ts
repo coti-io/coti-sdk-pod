@@ -1,4 +1,4 @@
-import type { PodRequest, RequestTrackingResponse } from "@coti/pod-sdk";
+import type { PodRequest, RequestTrackingResponse } from "@coti-io/pod-sdk";
 
 export type PollOptions = {
   intervalMs: number;

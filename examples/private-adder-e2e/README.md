@@ -1,6 +1,6 @@
 # Private Adder E2E Example
 
-Full-stack integration test for `@coti/pod-sdk`: deploy a `PrivateAdder` on Sepolia, submit a private `add(10, 20)` request, track it across Sepolia and COTI testnet with `PodRequest`, read the encrypted sum, and decrypt locally.
+Full-stack integration test for `@coti-io/pod-sdk`: deploy a `PrivateAdder` on Sepolia, submit a private `add(10, 20)` request, track it across Sepolia and COTI testnet with `PodRequest`, read the encrypted sum, and decrypt locally.
 
 This folder is **not published** — all Hardhat and contract dependencies are dev-only here.
 

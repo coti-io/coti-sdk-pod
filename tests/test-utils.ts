@@ -9,7 +9,7 @@ import {
   OFFICIAL_ENCRYPTION_SERVICE_URLS,
   normalizeEncryptionServiceUrl,
   type EncryptOptions,
-} from "@coti/pod-sdk";
+} from "@coti-io/pod-sdk";
 
 let dotenvLoaded = false;
 let cachedContext: TestContext | null = null;
