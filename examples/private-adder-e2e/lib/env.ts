@@ -3,6 +3,10 @@ import { join } from "node:path";
 
 const EXAMPLE_ROOT = process.cwd();
 
+/** Sepolia PrivateAdder used by default (shared e2e / CI). Override with `PRIVATE_ADDER_SEPOLIA_ADDRESS`. */
+export const DEFAULT_PRIVATE_ADDER_SEPOLIA_ADDRESS =
+  "0x788b9B0C69e1b49fEAD42342c679a35674c0DD82";
+
 let dotenvLoaded = false;
 
 function loadDotEnv(): void {
@@ -60,7 +64,7 @@ export function loadEnv(): ExampleEnv {
     rawNet === "mainnet" ? "mainnet" : "testnet";
 
   const deployOnMissing =
-    (process.env.DEPLOY_ON_MISSING ?? "true").toLowerCase() !== "false";
+    (process.env.DEPLOY_ON_MISSING ?? "false").toLowerCase() === "true";
 
   const sepoliaPrivateKey = normalizePrivateKey(
     process.env.SEPOLIA_PRIVATE_KEY || process.env.PRIVATE_KEY_ACCOUNT_2
@@ -84,13 +88,21 @@ export function loadEnv(): ExampleEnv {
   };
 }
 
-export function hasRequiredE2eEnv(env: ExampleEnv): boolean {
-  return Boolean(
-    env.sepoliaRpcUrl &&
-      env.cotiTestnetRpcUrl &&
-      env.sepoliaPrivateKey &&
-      env.accountAesKey
-  );
+export function assertRequiredE2eEnv(env: ExampleEnv): void {
+  const missing = missingE2eEnvFields(env);
+  if (missing.length > 0) {
+    throw new Error(`e2e requires ${missing.join(", ")}`);
+  }
+}
+
+/** Env vars required for e2e (same names as GitHub `integration` environment). */
+function missingE2eEnvFields(env: ExampleEnv): string[] {
+  const missing: string[] = [];
+  if (!env.sepoliaRpcUrl) missing.push("SEPOLIA_RPC_URL");
+  if (!env.cotiTestnetRpcUrl) missing.push("COTI_TESTNET_RPC_URL");
+  if (!env.sepoliaPrivateKey) missing.push("SEPOLIA_PRIVATE_KEY");
+  if (!env.accountAesKey) missing.push("POD_ACCOUNT_AES_KEY");
+  return missing;
 }
 
 export type DeployedAddresses = {
