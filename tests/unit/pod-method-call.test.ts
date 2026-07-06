@@ -4,6 +4,7 @@ import {
   encodePodMethodArguments,
   estimateForwardDataSizeFromArguments,
   mapPodMethodArgumentsEncoded,
+  EncryptionUrlNotAllowedError,
   type PodMethodArgument,
 } from "@coti/pod-sdk";
 
@@ -64,5 +65,31 @@ describe("mapPodMethodArgumentsEncoded", () => {
     await mapPodMethodArgumentsEncoded(working, "testnet", false);
     expect(working[0].value).toBe(7n);
     expect(original[0].value).toBe("7");
+  });
+
+  it("rejects unlisted encryption service URLs", async () => {
+    const args: PodMethodArgument[] = [
+      { type: DataType.Uint64, value: "1", isCallBackFee: false },
+    ];
+    await expect(
+      mapPodMethodArgumentsEncoded(args, "https://evil.example/pod-encryption", false)
+    ).rejects.toThrow(EncryptionUrlNotAllowedError);
+  });
+
+  it("rejects pre-encrypted it* JSON with invalid signatures when context is provided", async () => {
+    const args: PodMethodArgument[] = [
+      {
+        type: DataType.itUint64,
+        value: JSON.stringify({ ciphertext: "123", signature: "0xdeadbeef" }),
+        isCallBackFee: false,
+      },
+    ];
+    await expect(
+      mapPodMethodArgumentsEncoded(args, "testnet", false, {
+        userAddress: "0x1111111111111111111111111111111111111111",
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        functionSelector: "0x12345678",
+      })
+    ).rejects.toThrow(/IT signature/i);
   });
 });

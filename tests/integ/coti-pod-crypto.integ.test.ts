@@ -18,9 +18,10 @@ import {
   type EncryptedString,
   type EncryptedScalar,
 } from "@coti/pod-sdk";
-import { initTestContext, type TestContext } from "../test-utils.js";
+import { initTestContext, encryptionOptionsForInteg, type TestContext } from "../test-utils.js";
 
 const ctx: TestContext = initTestContext();
+const encOpts = encryptionOptionsForInteg();
 
 describe("PoD encryption service — plain scalar types", () => {
   const cases: { title: string; plaintext: string; dataType: DataType }[] = [
@@ -41,7 +42,7 @@ describe("PoD encryption service — plain scalar types", () => {
   it.each(cases)(
     "buildEncryptedInputs accepts $title and returns ciphertext + signature",
     async ({ plaintext, dataType }) => {
-      const out = await CotiPodCrypto.encrypt(plaintext, ctx.network, dataType);
+      const out = await CotiPodCrypto.encrypt(plaintext, ctx.network, dataType, encOpts);
       expect(out).toHaveProperty("ciphertext");
       expect(out).toHaveProperty("signature");
       const sig = (out as EncryptedScalar).signature;
@@ -51,7 +52,7 @@ describe("PoD encryption service — plain scalar types", () => {
   );
 
   it("defaults dataType to uint64 when omitted", async () => {
-    const out = await CotiPodCrypto.encrypt("42", ctx.network);
+    const out = await CotiPodCrypto.encrypt("42", ctx.network, undefined, encOpts);
     expect(out).toHaveProperty("ciphertext");
     expect(out).toHaveProperty("signature");
   });
@@ -67,7 +68,8 @@ describe("PoD encryption service — string plaintext", () => {
     const out = (await CotiPodCrypto.encrypt(
       "hello",
       ctx.network,
-      DataType.String
+      DataType.String,
+      encOpts
     )) as EncryptedString;
     expect(Array.isArray(out.ciphertext.value)).toBe(true);
     expect(Array.isArray(out.signature)).toBe(true);
@@ -78,7 +80,8 @@ describe("PoD encryption service — string plaintext", () => {
     const out = (await CotiPodCrypto.encrypt(
       "",
       ctx.network,
-      DataType.String
+      DataType.String,
+      encOpts
     )) as EncryptedString;
     expect(Array.isArray(out.ciphertext.value)).toBe(true);
     expect(Array.isArray(out.signature)).toBe(true);
@@ -90,7 +93,8 @@ describe("PoD encryption service — explicit base URL", () => {
     const out = await CotiPodCrypto.encrypt(
       "0",
       ctx.encryptionBaseUrl,
-      DataType.Uint64
+      DataType.Uint64,
+      encOpts
     );
     expect(out).toHaveProperty("ciphertext");
     expect(out).toHaveProperty("signature");

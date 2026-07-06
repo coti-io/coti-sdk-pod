@@ -12,11 +12,13 @@ import {
 } from "@coti-io/coti-sdk-typescript";
 import type { ctString } from "@coti-io/coti-sdk-typescript";
 import { EncryptionServiceError } from "./errors.js";
-
-const ENCRYPTION_SERVICE: Record<string, string> = {
-  testnet: "https://fullnode.testnet.coti.io/pod-encryption",
-  mainnet: "https://pod-encryption-service-mainnet.coti.io",
-};
+import {
+  resolveEncryptionServiceBaseUrl,
+  shouldVerifyItSignature,
+  verifyItEncryptedValue,
+  type EncryptionServiceSecurityOptions,
+  type ItVerificationOptions,
+} from "./encryption-security.js";
 
 const DEFAULT_ENCRYPT_TIMEOUT_MS = 30_000;
 
@@ -58,7 +60,9 @@ export type EncryptedValue = EncryptedScalar | EncryptedString;
 /** Legacy alias for EncryptedScalar (uint64). */
 export type EncryptedUint64 = EncryptedScalar;
 
-export interface EncryptOptions {
+export interface EncryptOptions
+  extends EncryptionServiceSecurityOptions,
+    ItVerificationOptions {
   /** Abort the HTTP request when the signal is aborted. */
   signal?: AbortSignal;
   /** Request timeout in milliseconds (default 30_000). */
@@ -128,8 +132,8 @@ export class CotiPodCrypto {
     dataType: DataType = DataType.Uint64,
     options?: EncryptOptions
   ): Promise<EncryptedValue> {
-    const baseUrl = ENCRYPTION_SERVICE[network] ?? network;
-    const url = `${baseUrl.replace(/\/$/, "")}/buildEncryptedInputs`;
+    const baseUrl = resolveEncryptionServiceBaseUrl(network, options);
+    const url = `${baseUrl}/buildEncryptedInputs`;
     const body: Record<string, unknown> = {
       dataType: toPlainServiceType(dataType),
       value,
@@ -173,6 +177,7 @@ export class CotiPodCrypto {
     const data = (await res.json()) as Record<string, unknown>;
     const plainType = toPlainServiceType(dataType);
 
+    let encrypted: EncryptedValue;
     if (plainType === DataType.String) {
       const ct = data.ciphertext as { value?: string[] } | undefined;
       const sig = data.signature as string[] | undefined;
@@ -181,18 +186,33 @@ export class CotiPodCrypto {
           "encryption response for string missing ciphertext.value or signature array"
         );
       }
-      return { ciphertext: { value: ct.value.map(String) }, signature: sig };
+      encrypted = { ciphertext: { value: ct.value.map(String) }, signature: sig };
+    } else {
+      const ciphertext = (data.ciphertext ??
+        (data as { cipherText?: string }).cipherText) as string | bigint | undefined;
+      const signature = data.signature as string | undefined;
+      if (ciphertext == null || signature == null) {
+        throw new EncryptionServiceError(
+          "encryption response missing ciphertext or signature"
+        );
+      }
+      encrypted = { ciphertext, signature: String(signature) };
     }
 
-    const ciphertext = (data.ciphertext ??
-      (data as { cipherText?: string }).cipherText) as string | bigint | undefined;
-    const signature = data.signature as string | undefined;
-    if (ciphertext == null || signature == null) {
-      throw new EncryptionServiceError(
-        "encryption response missing ciphertext or signature"
-      );
+    const context: EncryptContext | undefined =
+      options?.contractAddress || options?.functionSelector || options?.userAddress
+        ? {
+            contractAddress: options?.contractAddress,
+            functionSelector: options?.functionSelector,
+            userAddress: options?.userAddress,
+          }
+        : undefined;
+
+    if (shouldVerifyItSignature(context, options)) {
+      verifyItEncryptedValue(dataType, encrypted, context);
     }
-    return { ciphertext, signature: String(signature) };
+
+    return encrypted;
   }
 
   /**

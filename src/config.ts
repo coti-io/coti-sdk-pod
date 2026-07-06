@@ -20,4 +20,12 @@ export interface PodSdkConfig {
   chains: PodChainConfig[];
   /** Defaults to `"testnet"`. `PodContract` uses this as the encryption service target. */
   encryptionNetwork?: "testnet" | "mainnet" | string;
+  /** Additional encryption service base URLs trusted besides official endpoints. */
+  trustedEncryptionServiceUrls?: string[];
+  /**
+   * When true, allows any HTTPS encryption service URL (not recommended for production).
+   */
+  allowUnlistedEncryptionUrl?: boolean;
+  /** When false, skips client-side IT signature verification before contract calls. */
+  verifyItSignature?: boolean;
 }
