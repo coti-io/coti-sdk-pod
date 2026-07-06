@@ -36,5 +36,5 @@ jobs:
           COTI_TESTNET_RPC_URL: ${{ vars.COTI_TESTNET_RPC_URL }}
           SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
           POD_ACCOUNT_AES_KEY: ${{ secrets.POD_ACCOUNT_AES_KEY }}
-          DEPLOY_ON_MISSING: "true"
+          DEPLOY_ON_MISSING: "false"
         run: npm test

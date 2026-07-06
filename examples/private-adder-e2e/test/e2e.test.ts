@@ -20,7 +20,7 @@ import {
   type PodSdkConfig,
   type RequestTrackingResponse,
 } from "@coti/pod-sdk";
-import { hasRequiredE2eEnv, loadEnv } from "../lib/env";
+import { assertRequiredE2eEnv, loadEnv } from "../lib/env";
 import { pollUntilComplete } from "../lib/poll-request";
 import { resolvePrivateAdderAddress } from "../lib/resolve-contract";
 
@@ -57,8 +57,7 @@ function describePollPhase(s: RequestTrackingResponse): string {
 const env = loadEnv();
 
 describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
-  let privateAdderAddress: string | null = null;
-  let skipReason: string | null = null;
+  let privateAdderAddress: string;
 
   const config: PodSdkConfig = {
     encryptionNetwork: env.encryptionNetwork,
@@ -77,17 +76,14 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
   };
 
   beforeAll(async () => {
-    if (!hasRequiredE2eEnv(env)) {
-      skipReason =
-        "missing SEPOLIA_RPC_URL, COTI_TESTNET_RPC_URL, SEPOLIA_PRIVATE_KEY, or POD_ACCOUNT_AES_KEY";
-      return;
+    assertRequiredE2eEnv(env);
+    const addr = await resolvePrivateAdderAddress(env);
+    if (!addr) {
+      throw new Error(
+        "no PrivateAdder address (set PRIVATE_ADDER_SEPOLIA_ADDRESS, DEPLOY_ON_MISSING=true, or fix deploy)"
+      );
     }
-    privateAdderAddress = await resolvePrivateAdderAddress(env);
-    if (!privateAdderAddress) {
-      skipReason =
-        "no PrivateAdder address (set PRIVATE_ADDER_SEPOLIA_ADDRESS, deployed.json, or DEPLOY_ON_MISSING=true)";
-      return;
-    }
+    privateAdderAddress = addr;
     log(
       "setup",
       `PrivateAdder at ${privateAdderAddress} (Sepolia inbox ${SEPOLIA_DEFAULT_INBOX_ADDRESS})`
@@ -96,12 +92,7 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
 
   it(
     "submits add, tracks request, reads encrypted sum, decrypts to 30",
-    async (ctx) => {
-      if (skipReason || !privateAdderAddress) {
-        ctx.skip();
-        return;
-      }
-
+    async () => {
       const provider = new ethers.JsonRpcProvider(
         env.sepoliaRpcUrl!,
         SEPOLIA_CHAIN_ID
