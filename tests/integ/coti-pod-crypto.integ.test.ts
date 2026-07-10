@@ -1,5 +1,5 @@
 /**
- * Integration tests for the PoD encryption HTTP API (`buildEncryptedInputs`) and local
+ * Integration tests for the PoD encryption HTTP API (`build-encrypted-inputs`) and local
  * `CotiPodCrypto.decrypt` behaviour.
  *
  * Run: `npm run test:integ` (needs network access to the encryption service for encrypt tests).
@@ -40,7 +40,7 @@ describe("PoD encryption service — plain scalar types", () => {
   ];
 
   it.each(cases)(
-    "buildEncryptedInputs accepts $title and returns ciphertext + signature",
+    "build-encrypted-inputs accepts $title and returns ciphertext + signature",
     async ({ plaintext, dataType }) => {
       const out = await CotiPodCrypto.encrypt(plaintext, ctx.network, dataType, encOpts);
       expect(out).toHaveProperty("ciphertext");
@@ -59,7 +59,7 @@ describe("PoD encryption service — plain scalar types", () => {
 });
 
 /**
- * `DataType.it*` is for Solidity typings. The live `buildEncryptedInputs` API expects plain
+ * `DataType.it*` is for Solidity typings. The live `build-encrypted-inputs` API expects plain
  * names (`bool`, `uint64`, …) — see the scalar table above.
  */
 

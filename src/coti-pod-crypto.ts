@@ -13,6 +13,7 @@ import {
 import type { ctString } from "@coti-io/coti-sdk-typescript";
 import { EncryptionServiceError } from "./errors.js";
 import {
+  encryptionServiceApiUrl,
   resolveEncryptionServiceBaseUrl,
   type EncryptionServiceSecurityOptions,
   type ItVerificationOptions,
@@ -131,7 +132,7 @@ export class CotiPodCrypto {
     options?: EncryptOptions
   ): Promise<EncryptedValue> {
     const baseUrl = resolveEncryptionServiceBaseUrl(network, options);
-    const url = `${baseUrl}/buildEncryptedInputs`;
+    const url = encryptionServiceApiUrl(baseUrl, "buildEncryptedInputs");
     const body: Record<string, unknown> = {
       dataType: toPlainServiceType(dataType),
       value,
