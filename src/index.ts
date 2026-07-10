@@ -13,12 +13,15 @@ export {
 } from "./coti-pod-crypto.js";
 
 export {
+  ENCRYPTION_SERVICE_PATHS,
   OFFICIAL_ENCRYPTION_SERVICE_URLS,
+  encryptionServiceApiUrl,
   normalizeEncryptionServiceUrl,
   resolveEncryptionServiceBaseUrl,
   hasCompleteEncryptContext,
   verifyItEncryptedValue,
   shouldVerifyItSignature,
+  type EncryptionServicePath,
   type EncryptionServiceSecurityOptions,
   type ItVerificationOptions,
 } from "./encryption-security.js";

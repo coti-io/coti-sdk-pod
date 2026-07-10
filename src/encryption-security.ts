@@ -20,6 +20,18 @@ export const OFFICIAL_ENCRYPTION_SERVICE_URLS = {
   mainnet: "https://pod-encryption-service-mainnet.coti.io",
 } as const;
 
+/**
+ * HTTP routes on the PoD encryption service (kebab-case; see pod-encryption-service).
+ * @see https://github.com/cotitech-io/pod-encryption-service
+ */
+export const ENCRYPTION_SERVICE_PATHS = {
+  buildEncryptedInputs: "/build-encrypted-inputs",
+  validateEncryptedData: "/validate-encrypted-data",
+  health: "/health",
+} as const;
+
+export type EncryptionServicePath = keyof typeof ENCRYPTION_SERVICE_PATHS;
+
 const OFFICIAL_URL_SET = new Set(
   Object.values(OFFICIAL_ENCRYPTION_SERVICE_URLS).map(normalizeEncryptionServiceUrl)
 );
@@ -45,6 +57,14 @@ export interface ItVerificationOptions {
 /** Strip a trailing slash for stable URL comparison. */
 export function normalizeEncryptionServiceUrl(url: string): string {
   return url.replace(/\/$/, "");
+}
+
+/** Build a full encryption-service API URL from a resolved base URL and route name. */
+export function encryptionServiceApiUrl(
+  baseUrl: string,
+  route: EncryptionServicePath
+): string {
+  return `${normalizeEncryptionServiceUrl(baseUrl)}${ENCRYPTION_SERVICE_PATHS[route]}`;
 }
 
 function isLocalDevHost(hostname: string): boolean {
@@ -192,7 +212,7 @@ function verifyItUint256Signature(
 /**
  * Verify that client-side IT JSON was signed by `context.userAddress` for the
  * target contract call (e.g. from `buildInputText`). Not used for HTTP
- * `buildEncryptedInputs` responses, which are signed by the encryption service.
+ * `build-encrypted-inputs` responses, which are signed by the encryption service.
  */
 export function verifyItEncryptedValue(
   dataType: DataType,

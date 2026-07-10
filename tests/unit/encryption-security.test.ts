@@ -2,12 +2,24 @@ import { describe, it, expect } from "vitest";
 import { ethers } from "ethers";
 import {
   DataType,
+  ENCRYPTION_SERVICE_PATHS,
   EncryptionUrlNotAllowedError,
   ItSignatureVerificationError,
   OFFICIAL_ENCRYPTION_SERVICE_URLS,
+  encryptionServiceApiUrl,
   resolveEncryptionServiceBaseUrl,
   verifyItEncryptedValue,
 } from "@coti-io/pod-sdk";
+
+describe("encryptionServiceApiUrl", () => {
+  it("uses kebab-case routes from pod-encryption-service", () => {
+    expect(ENCRYPTION_SERVICE_PATHS.buildEncryptedInputs).toBe("/build-encrypted-inputs");
+    expect(ENCRYPTION_SERVICE_PATHS.validateEncryptedData).toBe("/validate-encrypted-data");
+    expect(
+      encryptionServiceApiUrl(OFFICIAL_ENCRYPTION_SERVICE_URLS.testnet, "buildEncryptedInputs")
+    ).toBe(`${OFFICIAL_ENCRYPTION_SERVICE_URLS.testnet}/build-encrypted-inputs`);
+  });
+});
 
 describe("resolveEncryptionServiceBaseUrl", () => {
   it("accepts testnet and mainnet keywords", () => {
