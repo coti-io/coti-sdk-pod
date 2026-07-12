@@ -26,6 +26,7 @@ import { resolvePrivateAdderAddress } from "../lib/resolve-contract";
 
 const SEPOLIA_CHAIN_ID = 11155111;
 const COTI_CHAIN_ID = 7082400;
+const INBOX_MIN_GAS_PRICE_WEI = 2_000_000_000n;
 
 const PRIVATE_ADDER_ABI = [
   "function add((uint256,bytes),(uint256,bytes),uint256) payable returns (bytes32)",
@@ -42,6 +43,32 @@ function log(section: string, detail?: string): void {
 
 function formatWei(wei: bigint): string {
   return `${ethers.formatEther(wei)} ETH`;
+}
+
+/**
+ * Inbox fees use inclusion-time `tx.gasprice`. Pin the submitted tx to the same
+ * gas price used in `estimateFee` so EIP-1559 base-fee drift cannot underfund.
+ */
+class GasPricePinnedWallet extends ethers.Wallet {
+  constructor(
+    key: string | ethers.SigningKey,
+    provider: ethers.Provider | null,
+    private readonly pinnedGasPrice: bigint
+  ) {
+    super(key, provider);
+  }
+
+  override async sendTransaction(
+    tx: ethers.TransactionRequest
+  ): Promise<ethers.TransactionResponse> {
+    const pinned: ethers.TransactionRequest = {
+      ...tx,
+      gasPrice: this.pinnedGasPrice,
+    };
+    delete pinned.maxFeePerGas;
+    delete pinned.maxPriorityFeePerGas;
+    return super.sendTransaction(pinned);
+  }
 }
 
 function describePollPhase(s: RequestTrackingResponse): string {
@@ -97,7 +124,19 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         env.sepoliaRpcUrl!,
         SEPOLIA_CHAIN_ID
       );
-      const signer = new ethers.Wallet(env.sepoliaPrivateKey!, provider);
+
+      const feeData = await provider.getFeeData();
+      const gasPrice =
+        (feeData.gasPrice ?? INBOX_MIN_GAS_PRICE_WEI) < INBOX_MIN_GAS_PRICE_WEI
+          ? INBOX_MIN_GAS_PRICE_WEI
+          : (feeData.gasPrice ?? INBOX_MIN_GAS_PRICE_WEI);
+
+      // Same gasPrice for fee quote and mined tx (inbox uses tx.gasprice).
+      const signer = new GasPricePinnedWallet(
+        env.sepoliaPrivateKey!,
+        provider,
+        gasPrice
+      );
       const walletAddress = await signer.getAddress();
       const walletBalance = await provider.getBalance(walletAddress);
 
@@ -120,11 +159,6 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         { type: DataType.Uint256, value: "0", isCallBackFee: true },
       ];
 
-      const feeData = await provider.getFeeData();
-      const gasPrice =
-        (feeData.gasPrice ?? 2_000_000_000n) < 2_000_000_000n
-          ? 2_000_000_000n
-          : (feeData.gasPrice ?? 2_000_000_000n);
       const feeCfg: PodFeeEstimationConfig = {
         forwardGasLimit: 600_000n,
         forwardDataSize: 4096n,
@@ -137,7 +171,8 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       log(
         "fees",
         `total ${formatWei(estimated.totalFee)} ` +
-          `(forward ${formatWei(estimated.remoteFee)} + callback ${formatWei(estimated.callBackFee)})`
+          `(forward ${formatWei(estimated.remoteFee)} + callback ${formatWei(estimated.callBackFee)}; ` +
+          `pinned gasPrice ${gasPrice.toString()} wei)`
       );
 
       log("submit", "calling add() via PodContract.encryptAndCallMethod …");
@@ -154,8 +189,9 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         );
       }
       expect(receipt?.status).toBe(1);
+      expect(receipt?.gasPrice).toBe(gasPrice);
       expect(receipt?.hash).toBeTruthy();
-      log("tx", `mined in block ${receipt!.blockNumber}`);
+      log("tx", `mined in block ${receipt!.blockNumber} @ ${receipt!.gasPrice} wei`);
 
       const requestIds = await pod.extractRequestIds(receipt!.hash);
       expect(requestIds.length).toBeGreaterThan(0);
