@@ -20,7 +20,7 @@ import {
   type PodSdkConfig,
   type RequestTrackingResponse,
 } from "@coti-io/pod-sdk";
-import { hasRequiredE2eEnv, loadEnv } from "../lib/env";
+import { assertRequiredE2eEnv, loadEnv } from "../lib/env";
 import { pollUntilComplete } from "../lib/poll-request";
 import { resolvePrivateAdderAddress } from "../lib/resolve-contract";
 
