@@ -68,11 +68,11 @@ contract MyApp is PodLib, PodUserSepolia {
 
 ## Network constants (confirm against installed package)
 
-From [`PodNetworkConstants.sol`](https://github.com/coti-io/coti-contracts/blob/main/contracts/pod/PodNetworkConstants.sol):
+Deployed CREATE3 inbox from `pod-ecosystem-integration` `deployConfig.json` (`pod.inbox.v2.2`). SDK defaults (`@coti-io/pod-sdk`) use the same address on all testnets below:
 
 | Chain | Chain ID | Inbox (CREATE3, same on all) |
 | --- | --- | --- |
-| Ethereum Sepolia | 11155111 | `0xAb625bE229F603f6BBF964474AFf6d5487e364De` |
+| Ethereum Sepolia | 11155111 | `0x3b8B70819f27e0438cBcE7f31894f799da52648F` |
 | COTI testnet | 7082400 | same |
 | Avalanche Fuji | 43113 | same |
 

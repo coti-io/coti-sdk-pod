@@ -1,10 +1,15 @@
 import { describe, it, expect } from "vitest";
+import { ethers } from "ethers";
 import {
   DataType,
   encodePodMethodArguments,
   estimateForwardDataSizeFromArguments,
   mapPodMethodArgumentsEncoded,
+  applyPodTxGasLimitBuffer,
+  POD_TX_GAS_LIMIT_BUFFER_BPS,
+  POD_INBOX_MESSAGE_SENT_EVENT,
   EncryptionUrlNotAllowedError,
+  DEFAULT_INBOX_ADDRESS,
   type PodMethodArgument,
 } from "@coti-io/pod-sdk";
 
@@ -23,6 +28,41 @@ describe("estimateForwardDataSizeFromArguments", () => {
       { type: DataType.Uint64, value: 42n, isCallBackFee: false },
     ];
     expect(estimateForwardDataSizeFromArguments(args)).toBe(256n);
+  });
+});
+
+describe("applyPodTxGasLimitBuffer", () => {
+  it("applies a +20% buffer to estimated gas (ceil)", () => {
+    expect(POD_TX_GAS_LIMIT_BUFFER_BPS).toBe(12000n);
+    expect(applyPodTxGasLimitBuffer(1_000_000n)).toBe(1_200_000n);
+    // 10 * 1.2 = 12 exactly
+    expect(applyPodTxGasLimitBuffer(10n)).toBe(12n);
+    // 1 * 1.2 = 1.2 → ceil to 2
+    expect(applyPodTxGasLimitBuffer(1n)).toBe(2n);
+    expect(applyPodTxGasLimitBuffer(1_071_217n)).toBe(
+      (1_071_217n * 12000n + 9999n) / 10000n
+    );
+  });
+
+  it("leaves zero unchanged", () => {
+    expect(applyPodTxGasLimitBuffer(0n)).toBe(0n);
+  });
+});
+
+describe("compact MessageSent topic0", () => {
+  it("matches InboxBase compact event signature", () => {
+    const iface = new ethers.Interface([POD_INBOX_MESSAGE_SENT_EVENT]);
+    expect(iface.getEvent("MessageSent")!.topicHash).toBe(
+      "0x2e489ff6032dec69660f6781fde68ecdaf7d42d1511806cd4e0781d44488fcad"
+    );
+  });
+});
+
+describe("DEFAULT_INBOX_ADDRESS", () => {
+  it("points at deployConfig pod.inbox.v2.2 CREATE3", () => {
+    expect(DEFAULT_INBOX_ADDRESS.toLowerCase()).toBe(
+      "0x3b8b70819f27e0438cbce7f31894f799da52648f"
+    );
   });
 });
 

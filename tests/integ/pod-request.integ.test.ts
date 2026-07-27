@@ -20,40 +20,79 @@ import { initTestContext } from "../test-utils.js";
 
 const SEPOLIA_CHAIN_ID = 11155111n;
 const COTI_CHAIN_ID = 7082400n;
+const FUJI_CHAIN_ID = 43113n;
 
+/**
+ * Inbox request ids pack `source(64) | target(64) | nonce(128)`.
+ * Seeded ids are recent live `MessageSent` events on inbox v2.2
+ * (`0x3b8B70819f27e0438cBcE7f31894f799da52648F`).
+ */
 const SEEDED_REQUEST_IDS: Array<{ chainId: bigint; requestId: string }> = [
-  // Requests originated on Coti testnet (chainId 0x6C11A0 embedded in upper 128 bits).
-  {
-    chainId: COTI_CHAIN_ID,
-    requestId:
-      "0x000000000000000000000000006C11A000000000000000000000000000000060",
-  },
-  {
-    chainId: COTI_CHAIN_ID,
-    requestId:
-      "0x000000000000000000000000006C11A000000000000000000000000000000061",
-  },
-  {
-    chainId: COTI_CHAIN_ID,
-    requestId:
-      "0x000000000000000000000000006C11A000000000000000000000000000000062",
-  },
-  // Requests originated on Sepolia (chainId 0xaa36a7).
+  // Sepolia → COTI testnet (nonces 0xc..0xe)
   {
     chainId: SEPOLIA_CHAIN_ID,
     requestId:
-      "0x00000000000000000000000000aa36a70000000000000000000000000000007a",
+      "0x0000000000aa36a700000000006c11a00000000000000000000000000000000c",
+  },
+  {
+    chainId: SEPOLIA_CHAIN_ID,
+    requestId:
+      "0x0000000000aa36a700000000006c11a00000000000000000000000000000000d",
+  },
+  {
+    chainId: SEPOLIA_CHAIN_ID,
+    requestId:
+      "0x0000000000aa36a700000000006c11a00000000000000000000000000000000e",
+  },
+  // COTI testnet → Fuji / Sepolia
+  {
+    chainId: COTI_CHAIN_ID,
+    requestId:
+      "0x00000000006c11a0000000000000a869000000000000000000000000000000cf",
+  },
+  {
+    chainId: COTI_CHAIN_ID,
+    requestId:
+      "0x00000000006c11a00000000000aa36a700000000000000000000000000000008",
   },
 ];
 
-/** Lower/upper nonce bounds to sweep on each chain (inclusive). */
-const SWEEP_RANGE: Array<{ chainId: bigint; fromNonce: bigint; toNonce: bigint }> = [
-  { chainId: COTI_CHAIN_ID, fromNonce: 0x60n, toNonce: 0x80n },
-  { chainId: SEPOLIA_CHAIN_ID, fromNonce: 0x70n, toNonce: 0x90n },
+/** Lower/upper nonce bounds to sweep on each source→target route (inclusive). */
+const SWEEP_RANGE: Array<{
+  sourceChainId: bigint;
+  targetChainId: bigint;
+  fromNonce: bigint;
+  toNonce: bigint;
+}> = [
+  {
+    sourceChainId: SEPOLIA_CHAIN_ID,
+    targetChainId: COTI_CHAIN_ID,
+    fromNonce: 0x8n,
+    toNonce: 0x10n,
+  },
+  {
+    sourceChainId: COTI_CHAIN_ID,
+    targetChainId: FUJI_CHAIN_ID,
+    fromNonce: 0xc8n,
+    toNonce: 0xd0n,
+  },
+  {
+    sourceChainId: COTI_CHAIN_ID,
+    targetChainId: SEPOLIA_CHAIN_ID,
+    fromNonce: 0x5n,
+    toNonce: 0xan,
+  },
 ];
 
-function packRequestId(chainId: bigint, nonce: bigint): string {
-  const packed = (chainId << 128n) | nonce;
+function packRequestId(
+  sourceChainId: bigint,
+  targetChainId: bigint,
+  nonce: bigint
+): string {
+  const src = sourceChainId & 0xffff_ffff_ffff_ffffn;
+  const tgt = targetChainId & 0xffff_ffff_ffff_ffffn;
+  const n = nonce & ((1n << 128n) - 1n);
+  const packed = (src << 192n) | (tgt << 128n) | n;
   return "0x" + packed.toString(16).padStart(64, "0");
 }
 
@@ -107,10 +146,12 @@ const canRun = Boolean(ctx.rpcUrl && ctx.cotiTestnetRpcUrl);
       async () => {
         const tracker = new PodRequest(config);
         const report: string[] = [];
+        let ok = 0;
         for (const { chainId, requestId } of SEEDED_REQUEST_IDS) {
           try {
             const status = await tracker.trackRequest(chainId, requestId);
             report.push(renderStatus(status));
+            ok += 1;
           } catch (err) {
             report.push(
               `[chain ${chainId}] ${requestId}  ERROR: ${
@@ -119,9 +160,8 @@ const canRun = Boolean(ctx.rpcUrl && ctx.cotiTestnetRpcUrl);
             );
           }
         }
-        // Always visible, even on pass.
         console.log("\n=== seeded requests ===\n" + report.join("\n\n"));
-        expect(report.length).toBeGreaterThan(0);
+        expect(ok).toBeGreaterThan(0);
       }
     );
 
@@ -131,24 +171,38 @@ const canRun = Boolean(ctx.rpcUrl && ctx.cotiTestnetRpcUrl);
       async () => {
         const tracker = new PodRequest(config);
         const report: string[] = [];
-        for (const { chainId, fromNonce, toNonce } of SWEEP_RANGE) {
-          const header = `\n=== sweep chain=${chainId} nonces=${fromNonce}..${toNonce} ===`;
+        let found = 0;
+        for (const {
+          sourceChainId,
+          targetChainId,
+          fromNonce,
+          toNonce,
+        } of SWEEP_RANGE) {
+          const header =
+            `\n=== sweep src=${sourceChainId} tgt=${targetChainId} ` +
+            `nonces=${fromNonce}..${toNonce} ===`;
           report.push(header);
           const tasks: Array<Promise<string>> = [];
           for (let n = fromNonce; n <= toNonce; n++) {
-            const requestId = packRequestId(chainId, n);
+            const requestId = packRequestId(sourceChainId, targetChainId, n);
             tasks.push(
               tracker
-                .trackRequest(chainId, requestId)
-                .then((s) => renderStatus(s, `n=${n.toString().padStart(3)} `))
-                .catch((err) => `n=${n.toString().padStart(3)} ${requestId}  not-found (${(err as Error).message})`)
+                .trackRequest(sourceChainId, requestId)
+                .then((s) => {
+                  found += 1;
+                  return renderStatus(s, `n=${n.toString().padStart(3)} `);
+                })
+                .catch(
+                  (err) =>
+                    `n=${n.toString().padStart(3)} ${requestId}  not-found (${(err as Error).message})`
+                )
             );
           }
           const results = await Promise.all(tasks);
           report.push(...results);
         }
         console.log(report.join("\n"));
-        expect(report.length).toBeGreaterThan(0);
+        expect(found).toBeGreaterThan(0);
       }
     );
   }
