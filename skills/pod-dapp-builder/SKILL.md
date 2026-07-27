@@ -78,7 +78,7 @@ Deployed CREATE3 inbox from `pod-ecosystem-integration` `deployConfig.json` (`po
 
 MPC executor (COTI testnet): `0xC76aaE4F3810fBBd5d96b92DEFeBE0034405Ad9c`
 
-SDK defaults (`@coti-io/pod-sdk` ≥ 0.1.2) align with these values.
+SDK defaults (`@coti-io/pod-sdk` ≥ 0.1.4) align with these values.
 
 ## Shipped examples (`@coti-io/coti-contracts`)
 

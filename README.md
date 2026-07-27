@@ -60,4 +60,4 @@ Publish flow:
 
 ## Current version
 
-`0.1.3`
+`0.1.4`
