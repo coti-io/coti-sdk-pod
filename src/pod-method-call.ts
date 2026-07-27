@@ -61,8 +61,24 @@ export type PodMethodSecurityOptions = EncryptionServiceSecurityOptions &
 const FEE_FN =
   "function calculateTwoWayFeeRequiredInLocalToken(uint256,uint256,uint256,uint256,uint256) view returns (uint256,uint256)";
 const INBOX_MIN_GAS_PRICE_WEI = 2_000_000_000n;
-const MSG_SENT =
-  "event MessageSent(bytes32 indexed requestId,uint256 indexed targetChainId,address indexed targetContract,(bytes4,bytes,bytes8[],bytes32[]) methodCall,bytes4 callbackSelector,bytes4 errorSelector)";
+/** Compact `MessageSent` from InboxBase (payload lives in storage, not the log). */
+export const POD_INBOX_MESSAGE_SENT_EVENT =
+  "event MessageSent(bytes32 indexed requestId,uint256 indexed targetChainId,address indexed targetContract,bytes4 methodSelector,bytes32 methodCallHash,uint256 dataLength,uint16 datatypeCount,uint16 datalenCount,bytes4 callbackSelector,bytes4 errorSelector)";
+/**
+ * Multiplier applied to `eth_estimateGas` before submit (basis points).
+ * Recent PoD txs often land at ~99% of the raw estimate; keep headroom.
+ */
+export const POD_TX_GAS_LIMIT_BUFFER_BPS = 12000n; // 120% = +20%
+const BPS_DENOMINATOR = 10000n;
+
+/** Apply {@link POD_TX_GAS_LIMIT_BUFFER_BPS} to an estimated gas amount (ceil). */
+export function applyPodTxGasLimitBuffer(estimatedGas: bigint): bigint {
+  if (estimatedGas <= 0n) return estimatedGas;
+  return (
+    (estimatedGas * POD_TX_GAS_LIMIT_BUFFER_BPS + BPS_DENOMINATOR - 1n) /
+    BPS_DENOMINATOR
+  );
+}
 
 function providerFromRunner(r: ethers.ContractRunner): ethers.Provider {
   if (typeof (r as ethers.Provider).getTransactionReceipt === "function") return r as ethers.Provider;
@@ -307,7 +323,12 @@ export class PodContract {
     if (!fn.fragment.payable && fee.totalFee !== 0n) {
       throw new Error(`${method} is not payable but totalFee is ${fee.totalFee}`);
     }
-    return fn(...vals, fn.fragment.payable ? { value: fee.totalFee } : {});
+    const overrides: ethers.Overrides = fn.fragment.payable
+      ? { value: fee.totalFee }
+      : {};
+    const estimatedGas = await fn.estimateGas(...vals, overrides);
+    const gasLimit = applyPodTxGasLimitBuffer(estimatedGas);
+    return fn(...vals, { ...overrides, gasLimit });
   }
 
   async estimateFee(
@@ -353,7 +374,7 @@ export class PodContract {
     const rc = await this._provider.getTransactionReceipt(txHash);
     if (!rc) throw new Error(`no receipt: ${txHash}`);
     const want = (await this.inboxAddr()).toLowerCase();
-    const iface = new ethers.Interface([MSG_SENT]);
+    const iface = new ethers.Interface([POD_INBOX_MESSAGE_SENT_EVENT]);
     const topic0 = iface.getEvent("MessageSent")!.topicHash;
     const out: string[] = [];
     for (const log of rc.logs) {

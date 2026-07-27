@@ -1,11 +1,11 @@
 /**
  * Default PoD Inbox addresses by chain id.
- * Source: `@coti-io/coti-contracts` `PodNetworkConstants.INBOX` (CREATE3, same on all chains).
+ * Source: `pod-ecosystem-integration/deployConfig.json` `inboxSalt` (`pod.inbox.v2.2` CREATE3).
  */
 
 /** Shared CREATE3 inbox on Sepolia, COTI testnet, and Avalanche Fuji. */
 export const DEFAULT_INBOX_ADDRESS =
-  "0xAb625bE229F603f6BBF964474AFf6d5487e364De" as const;
+  "0x3b8B70819f27e0438cBcE7f31894f799da52648F" as const;
 
 /** Sepolia (11155111) — EVM-side inbox. */
 export const SEPOLIA_DEFAULT_INBOX_ADDRESS = DEFAULT_INBOX_ADDRESS;
