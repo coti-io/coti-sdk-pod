@@ -20,7 +20,17 @@ Fee handling is mandatory for successful remote execution and callback delivery 
 ## Operator configuration
 
 - `InboxMiner.setPriceOracle`, `updateMinFeeConfigs` — [`coti-pod-inbox-contracts`](https://github.com/coti-io/coti-pod-inbox-contracts).
-- `FeeConfig`: constant minimum gas units or template (`gasPerByte`, `callbackExecutionGas`, `errorLength`, `bufferRatioX10000`).
+- `FeeConfig`: constant minimum gas units or template (`gasPerByte`, `callbackExecutionGas`, `errorLength`, `bufferRatioX10000`, **`gasPriceMul` / `gasPriceDiv`** for cross-chain gas-price skew). Defaults `mul/div = 1/1`; both must be non-zero.
+
+## Miner execution gas (mine path)
+
+Miners / CMS should not size `batchProcessRequests` from `targetFee × 64/63` alone. Use:
+
+1. Public `estimateExecutionGasForMiner(sourceChainId, mined, maxUserGas)` → always-reverts with `ExecutionGasEstimate(gasUsed, responseDataSize, errorDataSize)`.
+2. Buffer `gasUsed`, pack batches by projected cost, then `eth_estimateGas` the full tx.
+3. `gasLimit = max(projected, eth_estimateGas)`.
+
+Canonical write-up: [`ESTIMATE_EXECUTION_GAS.md`](https://github.com/coti-io/coti-pod-inbox-contracts/blob/main/docs/ESTIMATE_EXECUTION_GAS.md). Shared planners: PEI `scripts/inbox-mine-gas.ts`, CMS `app/modules/pod-inbox-relay/mine_gas.py`.
 
 ## Estimation (off-chain / UI)
 
