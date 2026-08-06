@@ -17,10 +17,28 @@ Fee handling is mandatory for successful remote execution and callback delivery 
   - **Callback leg** → `callbackFeeLocalWei` slice of total → `Request.callerFee`.
 - `callbackFeeLocalWei` is a **slice of** `msg.value`, not an add-on.
 
+## Maximum method-call size (required for apps)
+
+The Inbox admits messages by **payload weight**, not `abi.encode(methodCall).length`:
+
+```text
+weight = data.length + datatypes.length * 32 + datalens.length * 32
+```
+
+| Cap | Limits | Typical default |
+| --- | --- | --- |
+| `FeeConfig.maxMethodCallBytes` | Create / ingest | **8192** |
+| `maxReplyMethodCallBytes` | `respond` / `raise` return legs | **8192** |
+| `FeeConfig.maxExecutionGas` | Gas-unit budget on `targetFee` / `callerFee` | Network policy |
+
+Oversized create/ingest → `MethodCallTooLarge`. Oversized reply → `ResponseOutOfBounds`.  
+Read live caps from the Inbox (`remoteMinFeeConfig` / `localMinFeeConfig`, `maxReplyMethodCallBytes`) before building large encrypted or dynamic args. Canonical user doc: [how-poa-fees-work.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/how-poa-fees-work.md#maximum-method-call-size-apps-must-respect-this). Operator detail: [SIZE_CAPS_AND_MINER_REJECT.md](https://github.com/coti-io/coti-pod-inbox-contracts/blob/main/docs/SIZE_CAPS_AND_MINER_REJECT.md).
+
 ## Operator configuration
 
 - `InboxMiner.setPriceOracle`, `updateMinFeeConfigs` — [`coti-pod-inbox-contracts`](https://github.com/coti-io/coti-pod-inbox-contracts).
 - `FeeConfig`: constant minimum gas units or template (`gasPerByte`, `callbackExecutionGas`, `errorLength`, `bufferRatioX10000`, **`gasPriceMul` / `gasPriceDiv`** for cross-chain gas-price skew). Defaults `mul/div = 1/1`; both must be non-zero.
+- Size / budget caps above are **always required**, including constant-fee mode (`constantFee > 0` does not allow omitting them).
 
 ## Miner execution gas (mine path)
 
@@ -73,6 +91,8 @@ Mark exactly one `PodMethodArgument` with `isCallBackFee: true` — `PodContract
 
 - Underfunded total: `TotalFeeTooLow`, `TargetFeeTooLow`.
 - Underfunded callback: `CallbackFeeTooLow`.
+- Oversized method call: `MethodCallTooLarge` (create/ingest payload weight).
+- Oversized reply: `ResponseOutOfBounds` (`respond` / `raise` weight).
 - Test both revert paths plus success with buffered estimate.
 
 ## Fault testing

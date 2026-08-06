@@ -63,7 +63,7 @@ contract MyApp is PodLib, PodUserSepolia {
 ```
 
 4. Convert sync flows to async: submit via Inbox, persist `requestId`, fulfill in `onlyInbox` callback.
-5. Budget fees (`msg.value`, `callbackFeeLocalWei`); estimate via Inbox views or `PodContract.estimateFee`.
+5. Budget fees (`msg.value`, `callbackFeeLocalWei`); estimate via Inbox views or `PodContract.estimateFee`. Keep method-call **payload weight** under Inbox caps (default **8192**; see `references/fees-and-pricing.md`).
 6. Client: encrypt/decrypt with `CotiPodCrypto`; track lifecycle with `PodRequest`; extract `requestId` via `PodContract.extractRequestIds` (compact `MessageSent` events).
 
 ## Network constants (confirm against installed package)
@@ -111,7 +111,7 @@ Account key recovery is in `@coti-io/coti-sdk-typescript` — not `@coti-io/pod-
 See [contract-patterns-checklist.md](https://github.com/coti-io/documentation/blob/main/privacy-on-demand/contract-patterns-checklist.md). Skill-local detail:
 
 - `references/type-system-and-roles.md` — type mapping and `ctUint128` / `ctUint256` shapes
-- `references/fees-and-pricing.md` — fee model and estimation
+- `references/fees-and-pricing.md` — fee model, **max method-call size**, and estimation
 - `references/conversion-playbook.md` — migration from sync non-private contracts
 
 ## References (skill-local)
