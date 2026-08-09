@@ -323,9 +323,12 @@ export class PodContract {
     if (!fn.fragment.payable && fee.totalFee !== 0n) {
       throw new Error(`${method} is not payable but totalFee is ${fee.totalFee}`);
     }
-    const overrides: ethers.Overrides = fn.fragment.payable
-      ? { value: fee.totalFee }
-      : {};
+    // Pin the same gasPrice used for estimateFee so eth_call/estimateGas and the
+    // inclusion tx agree with InboxFeeManager._referenceGasPrice (tx.gasprice).
+    const overrides: ethers.Overrides = {
+      ...(fn.fragment.payable ? { value: fee.totalFee } : {}),
+      ...(feeCfg.gasPrice !== undefined ? { gasPrice: feeCfg.gasPrice } : {}),
+    };
     const estimatedGas = await fn.estimateGas(...vals, overrides);
     const gasLimit = applyPodTxGasLimitBuffer(estimatedGas);
     return fn(...vals, { ...overrides, gasLimit });
