@@ -130,16 +130,18 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       const latest = await provider.getBlock("latest");
       const baseFee = latest?.baseFeePerGas ?? 0n;
       const tip = feeData.maxPriorityFeePerGas ?? 1_000_000_000n;
-      // Match InboxFeeManager._referenceGasPrice (basefee + priority) and pad 25%.
-      let gasPrice = baseFee + tip;
-      if (gasPrice < INBOX_MIN_GAS_PRICE_WEI) gasPrice = INBOX_MIN_GAS_PRICE_WEI;
-      gasPrice = (gasPrice * 125n) / 100n;
+      // Inclusion gas price (legacy tx).
+      let txGasPrice = baseFee + tip;
+      if (txGasPrice < INBOX_MIN_GAS_PRICE_WEI) txGasPrice = INBOX_MIN_GAS_PRICE_WEI;
+      // Fee quote gas price: InboxFeeManager converts msg.value with
+      // `_referenceGasPrice` (basefee+minPriority), ignoring tx.gasprice on
+      // EIP-1559. Over-quote wei so validation still clears after oracle skew.
+      const feeQuoteGasPrice = txGasPrice * 40n;
 
-      // Same gasPrice for fee quote and mined tx.
       const signer = new GasPricePinnedWallet(
         env.sepoliaPrivateKey!,
         provider,
-        gasPrice
+        txGasPrice
       );
       const walletAddress = await signer.getAddress();
       const walletBalance = await provider.getBalance(walletAddress);
@@ -166,7 +168,7 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       const feeCfg: PodFeeEstimationConfig = {
         forwardGasLimit: 5_000_000n,
         forwardDataSize: 4096n,
-        gasPrice,
+        gasPrice: feeQuoteGasPrice,
         callBackGasLimit: 500_000n,
         callBackDataSize: 1024n,
       };
@@ -176,7 +178,7 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         "fees",
         `total ${formatWei(estimated.totalFee)} ` +
           `(forward ${formatWei(estimated.remoteFee)} + callback ${formatWei(estimated.callBackFee)}; ` +
-          `pinned gasPrice ${gasPrice.toString()} wei)`
+          `txGasPrice ${txGasPrice.toString()} feeQuoteGasPrice ${feeQuoteGasPrice.toString()} wei)`
       );
 
       log("submit", "calling add() via PodContract.encryptAndCallMethod …");
