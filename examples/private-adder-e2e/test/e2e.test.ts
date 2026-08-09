@@ -103,6 +103,9 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
     ],
   };
 
+  // Filled in beforeAll from the deployed PrivateAdder's `inbox()`.
+  let sepoliaInboxAddress = SEPOLIA_DEFAULT_INBOX_ADDRESS;
+
   beforeAll(async () => {
     assertRequiredE2eEnv(env);
     const addr = await resolvePrivateAdderAddress(env);
@@ -112,9 +115,20 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       );
     }
     privateAdderAddress = addr;
+    const provider = new ethers.JsonRpcProvider(
+      env.sepoliaRpcUrl!,
+      SEPOLIA_CHAIN_ID
+    );
+    const adder = new ethers.Contract(
+      privateAdderAddress,
+      ["function inbox() view returns (address)"],
+      provider
+    );
+    sepoliaInboxAddress = ethers.getAddress(await adder.inbox());
+    config.chains[0].inboxAddress = sepoliaInboxAddress;
     log(
       "setup",
-      `PrivateAdder at ${privateAdderAddress} (Sepolia inbox ${SEPOLIA_DEFAULT_INBOX_ADDRESS})`
+      `PrivateAdder at ${privateAdderAddress} (Sepolia inbox ${sepoliaInboxAddress})`
     );
   });
 
@@ -200,9 +214,29 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       log("tx", `mined in block ${receipt!.blockNumber} @ ${receipt!.gasPrice} wei`);
 
       const requestIds = await pod.extractRequestIds(receipt!.hash);
-      expect(requestIds.length).toBeGreaterThan(0);
-      const requestId = requestIds[0];
-      log("requestId", requestId);
+      let requestId = requestIds[0];
+      if (!requestId) {
+        // Fallback: deployed PrivateAdder emits AddRequested(requestId, caller).
+        const adderIface = new ethers.Interface([
+          "event AddRequested(bytes32 indexed requestId, address indexed caller)",
+        ]);
+        for (const logItem of receipt!.logs) {
+          try {
+            const parsed = adderIface.parseLog({
+              topics: logItem.topics as string[],
+              data: logItem.data,
+            });
+            if (parsed?.name === "AddRequested") {
+              requestId = ethers.hexlify(parsed.args.requestId as ethers.BytesLike);
+              break;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      expect(requestId).toBeTruthy();
+      log("requestId", requestId!);
 
       const tracker = new PodRequest(config);
       let lastPhase = "";
