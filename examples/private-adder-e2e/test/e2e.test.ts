@@ -195,7 +195,7 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         );
       }
       expect(receipt?.status).toBe(1);
-      expect(receipt?.gasPrice).toBe(gasPrice);
+      expect(receipt?.gasPrice).toBe(txGasPrice);
       expect(receipt?.hash).toBeTruthy();
       log("tx", `mined in block ${receipt!.blockNumber} @ ${receipt!.gasPrice} wei`);
 
