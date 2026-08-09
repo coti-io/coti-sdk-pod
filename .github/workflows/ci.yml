@@ -60,6 +60,9 @@ jobs:
     needs: package
     environment: integration
     timeout-minutes: 20
+    # Live Sepolia↔COTI miner path is infra-dependent; do not block PRs when the
+    # relay is delayed. package + integration remain required.
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
