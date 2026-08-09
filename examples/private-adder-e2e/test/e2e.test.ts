@@ -46,8 +46,9 @@ function formatWei(wei: bigint): string {
 }
 
 /**
- * Inbox fees use inclusion-time `tx.gasprice`. Pin the submitted tx to the same
- * gas price used in `estimateFee` so EIP-1559 base-fee drift cannot underfund.
+ * Inbox fees convert msg.value → gas using `_referenceGasPrice` (basefee +
+ * minPriority on EIP-1559). Quote with at least that reference so prepaid wei
+ * still buys enough gas units at inclusion.
  */
 class GasPricePinnedWallet extends ethers.Wallet {
   constructor(
@@ -126,12 +127,15 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       );
 
       const feeData = await provider.getFeeData();
-      const gasPrice =
-        (feeData.gasPrice ?? INBOX_MIN_GAS_PRICE_WEI) < INBOX_MIN_GAS_PRICE_WEI
-          ? INBOX_MIN_GAS_PRICE_WEI
-          : (feeData.gasPrice ?? INBOX_MIN_GAS_PRICE_WEI);
+      const latest = await provider.getBlock("latest");
+      const baseFee = latest?.baseFeePerGas ?? 0n;
+      const tip = feeData.maxPriorityFeePerGas ?? 1_000_000_000n;
+      // Match InboxFeeManager._referenceGasPrice (basefee + priority) and pad 25%.
+      let gasPrice = baseFee + tip;
+      if (gasPrice < INBOX_MIN_GAS_PRICE_WEI) gasPrice = INBOX_MIN_GAS_PRICE_WEI;
+      gasPrice = (gasPrice * 125n) / 100n;
 
-      // Same gasPrice for fee quote and mined tx (inbox uses tx.gasprice).
+      // Same gasPrice for fee quote and mined tx.
       const signer = new GasPricePinnedWallet(
         env.sepoliaPrivateKey!,
         provider,
@@ -160,7 +164,7 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       ];
 
       const feeCfg: PodFeeEstimationConfig = {
-        forwardGasLimit: 600_000n,
+        forwardGasLimit: 5_000_000n,
         forwardDataSize: 4096n,
         gasPrice,
         callBackGasLimit: 500_000n,
