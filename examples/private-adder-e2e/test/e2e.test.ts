@@ -21,6 +21,7 @@ import {
   type RequestTrackingResponse,
 } from "@coti-io/pod-sdk";
 import { assertRequiredE2eEnv, loadEnv } from "../lib/env";
+import { mineRequestToDestination } from "../lib/mine-request";
 import { pollUntilComplete } from "../lib/poll-request";
 import { resolvePrivateAdderAddress } from "../lib/resolve-contract";
 
@@ -46,9 +47,9 @@ function formatWei(wei: bigint): string {
 }
 
 /**
- * Inbox fees convert msg.value → gas using `_referenceGasPrice` (basefee +
- * minPriority on EIP-1559). Quote with at least that reference so prepaid wei
- * still buys enough gas units at inclusion.
+ * Prefer legacy `gasPrice` on the submitted tx so inclusion uses the same
+ * wei→gas conversion as `estimateFee` (Inbox validates against tx.gasprice /
+ * reference floor). PodContract also pins gasPrice from feeCfg.
  */
 class GasPricePinnedWallet extends ethers.Wallet {
   constructor(
@@ -125,10 +126,13 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       provider
     );
     sepoliaInboxAddress = ethers.getAddress(await adder.inbox());
+    // CREATE3 inboxes share the same address on Sepolia and COTI — track both legs
+    // against the contract's inbox, not a mismatched SDK default.
     config.chains[0].inboxAddress = sepoliaInboxAddress;
+    config.chains[1].inboxAddress = sepoliaInboxAddress;
     log(
       "setup",
-      `PrivateAdder at ${privateAdderAddress} (Sepolia inbox ${sepoliaInboxAddress})`
+      `PrivateAdder at ${privateAdderAddress} (inbox ${sepoliaInboxAddress} on Sepolia+COTI)`
     );
   });
 
@@ -144,18 +148,18 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       const latest = await provider.getBlock("latest");
       const baseFee = latest?.baseFeePerGas ?? 0n;
       const tip = feeData.maxPriorityFeePerGas ?? 1_000_000_000n;
-      // Inclusion gas price (legacy tx).
-      let txGasPrice = baseFee + tip;
-      if (txGasPrice < INBOX_MIN_GAS_PRICE_WEI) txGasPrice = INBOX_MIN_GAS_PRICE_WEI;
-      // Fee quote gas price: InboxFeeManager converts msg.value with
-      // `_referenceGasPrice` (basefee+minPriority), ignoring tx.gasprice on
-      // EIP-1559. Over-quote wei so validation still clears after oracle skew.
-      const feeQuoteGasPrice = txGasPrice * 40n;
+      // Same gasPrice for fee quote and mined tx — do not over-quote (40x hacks
+      // blow up constant-fee legs and underfund the CI wallet).
+      let gasPrice = baseFee + tip;
+      if (feeData.gasPrice != null && feeData.gasPrice > gasPrice) {
+        gasPrice = feeData.gasPrice;
+      }
+      if (gasPrice < INBOX_MIN_GAS_PRICE_WEI) gasPrice = INBOX_MIN_GAS_PRICE_WEI;
 
       const signer = new GasPricePinnedWallet(
         env.sepoliaPrivateKey!,
         provider,
-        txGasPrice
+        gasPrice
       );
       const walletAddress = await signer.getAddress();
       const walletBalance = await provider.getBalance(walletAddress);
@@ -180,19 +184,27 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
       ];
 
       const feeCfg: PodFeeEstimationConfig = {
-        forwardGasLimit: 5_000_000n,
+        forwardGasLimit: 600_000n,
         forwardDataSize: 4096n,
-        gasPrice: feeQuoteGasPrice,
+        gasPrice,
         callBackGasLimit: 500_000n,
         callBackDataSize: 1024n,
       };
 
       const estimated = await pod.estimateFee("add", args, feeCfg);
+      // Leave room for gasLimit * gasPrice on top of msg.value.
+      const minBalance = estimated.totalFee + gasPrice * 2_000_000n;
+      if (walletBalance < minBalance) {
+        throw new Error(
+          `Sepolia wallet underfunded: have ${formatWei(walletBalance)}, ` +
+            `need ~${formatWei(minBalance)} (fee ${formatWei(estimated.totalFee)} + gas headroom)`
+        );
+      }
       log(
         "fees",
         `total ${formatWei(estimated.totalFee)} ` +
           `(forward ${formatWei(estimated.remoteFee)} + callback ${formatWei(estimated.callBackFee)}; ` +
-          `txGasPrice ${txGasPrice.toString()} feeQuoteGasPrice ${feeQuoteGasPrice.toString()} wei)`
+          `gasPrice ${gasPrice.toString()} wei)`
       );
 
       log("submit", "calling add() via PodContract.encryptAndCallMethod …");
@@ -209,7 +221,7 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         );
       }
       expect(receipt?.status).toBe(1);
-      expect(receipt?.gasPrice).toBe(txGasPrice);
+      expect(receipt?.gasPrice).toBe(gasPrice);
       expect(receipt?.hash).toBeTruthy();
       log("tx", `mined in block ${receipt!.blockNumber} @ ${receipt!.gasPrice} wei`);
 
@@ -249,6 +261,49 @@ describe("PrivateAdder e2e — Sepolia + COTI testnet", () => {
         {
           intervalMs: env.pollIntervalMs,
           timeoutMs: env.pollTimeoutMs,
+          selfMineAfterMs: 30_000,
+          onNeedsMine: async (phase, s) => {
+            const minerKey =
+              process.env.POD_E2E_MINER_PRIVATE_KEY?.trim() ||
+              process.env.GLOBAL_PRIVATE_KEY?.trim();
+            if (!minerKey) {
+              log(
+                "mine",
+                `skip self-mine (${phase}): set POD_E2E_MINER_PRIVATE_KEY (authorized Inbox miner)`
+              );
+              return;
+            }
+            try {
+              if (phase === "outbound") {
+                await mineRequestToDestination({
+                  sourceRpcUrl: env.sepoliaRpcUrl!,
+                  destRpcUrl: env.cotiTestnetRpcUrl!,
+                  sourceChainId: SEPOLIA_CHAIN_ID,
+                  destChainId: COTI_CHAIN_ID,
+                  inboxAddress: sepoliaInboxAddress,
+                  privateKey: minerKey,
+                  requestId: requestId!,
+                  log: (m) => log("mine", m),
+                });
+                return;
+              }
+              const returnId = s.response?.requestId;
+              if (!returnId) return;
+              await mineRequestToDestination({
+                sourceRpcUrl: env.cotiTestnetRpcUrl!,
+                destRpcUrl: env.sepoliaRpcUrl!,
+                sourceChainId: COTI_CHAIN_ID,
+                destChainId: SEPOLIA_CHAIN_ID,
+                inboxAddress: sepoliaInboxAddress,
+                privateKey: minerKey,
+                requestId: returnId,
+                log: (m) => log("mine", m),
+              });
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              log("mine", `self-mine ${phase} failed: ${msg}`);
+            }
+          },
           onPoll: (s, n) => {
             const phase = describePollPhase(s);
             if (phase !== lastPhase) {
