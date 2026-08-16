@@ -28,7 +28,7 @@ export async function resolvePrivateAdderAddress(
       return null;
     }
 
-    execSync("npx hardhat run scripts/deploy.ts --network sepolia", {
+    execSync("node scripts/deploy.mjs", {
       cwd: process.cwd(),
       stdio: "inherit",
       env: process.env,

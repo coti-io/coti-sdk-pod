@@ -8,8 +8,8 @@ import "@coti-io/coti-contracts/contracts/pod/PodNetworkConstants.sol";
 /// @title PrivateAdder
 /// @notice Adds two encrypted uint64 values via PoD on Sepolia (SDK preset addresses).
 contract PrivateAdder is PodLib, PodUserSepolia {
-    /// @dev MPC executor wired to the CREATE3 inbox on COTI testnet (PodNetworkConstants value is stale for add64).
-    address private constant COTI_TESTNET_MPC_EXECUTOR_V2 =
+    /// @dev Prefer the add64-capable COTI executor used by prior e2e (constants may lag).
+    address private constant COTI_TESTNET_MPC_EXECUTOR_ADD64 =
         0x68E151b78D51cEA01EEF6ee354579E044606A739;
 
     enum RequestStatus {
@@ -25,8 +25,9 @@ contract PrivateAdder is PodLib, PodUserSepolia {
     event AddCompleted(bytes32 indexed requestId);
 
     constructor() PodLibBase(msg.sender) {
+        // PodUserSepolia already set CREATE3 inbox; pin the add64 MPC executor.
         configureCoti(
-            COTI_TESTNET_MPC_EXECUTOR_V2,
+            COTI_TESTNET_MPC_EXECUTOR_ADD64,
             PodNetworkConstants.COTI_TESTNET_CHAIN_ID
         );
     }
