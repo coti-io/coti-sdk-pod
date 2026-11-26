@@ -62,7 +62,7 @@ contract MyApp is PodLib, PodUserSepolia {
 }
 ```
 
-4. Convert sync flows to async: submit via Inbox, persist `requestId`, fulfill in `onlyInbox` callback.
+4. Convert sync flows to async: submit via Inbox, persist `requestId`, fulfill in an `onlyMpcExecutor` callback (bare `onlyInbox` only checks the transport, not the remote sender).
 5. Budget fees (`msg.value`, `callbackFeeLocalWei`); estimate via Inbox views or `PodContract.estimateFee`. Keep method-call **payload weight** under Inbox caps (default **8192**; see `references/fees-and-pricing.md`).
 6. Client: encrypt/decrypt with `CotiPodCrypto`; track lifecycle with `PodRequest`; extract `requestId` via `PodContract.extractRequestIds` (compact `MessageSent` events).
 

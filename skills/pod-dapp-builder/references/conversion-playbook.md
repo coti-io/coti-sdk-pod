@@ -20,7 +20,7 @@ See [tutorials overview](https://github.com/coti-io/documentation/blob/main/priv
 3. Move sensitive logic to COTI (`gt*`) or PodLib primitives.
 4. Add fee path: estimate with `calculateTwoWayFeeRequiredInLocalToken` or `PodContract.estimateFee`.
 5. Replace sync returns with request ID + callback fulfillment.
-6. Persist `ct*` for client decrypt; implement `onlyInbox` callbacks and error handlers.
+6. Persist `ct*` for client decrypt; implement `onlyMpcExecutor` callbacks and error handlers.
 7. Client: `PodContract.extractRequestIds` + `PodRequest.trackRequest` + `CotiPodCrypto.decrypt`.
 8. Update tests for async completion and fee underfunding.
 
@@ -42,6 +42,7 @@ Do **not** call `setInbox` / `configureCoti` manually when using `PodUserSepolia
 ```solidity
 mapping(bytes32 => address) private _requestOwner;
 mapping(bytes32 => ctUint64) private _resultByRequest;
+mapping(bytes32 => bool) private _completed;
 
 event PrivateOpRequested(bytes32 indexed requestId, address indexed requester);
 event PrivateOpCompleted(bytes32 indexed requestId);
@@ -62,11 +63,12 @@ function privateOp(
     emit PrivateOpRequested(requestId, msg.sender);
 }
 
-function privateOpCallback(bytes calldata data) external onlyInbox {
+// onlyMpcExecutor checks the remote chain and sender; bare onlyInbox only checks the transport.
+function privateOpCallback(bytes calldata data) external onlyMpcExecutor {
     bytes32 requestId = inbox.inboxSourceRequestId();
-    if (requestId == bytes32(0)) {
-        requestId = inbox.inboxRequestId();
-    }
+    require(_requestOwner[requestId] != address(0), "unknown request");
+    require(!_completed[requestId], "already completed");
+    _completed[requestId] = true;
     ctUint64 result = abi.decode(data, (ctUint64));
     _resultByRequest[requestId] = result;
     emit PrivateOpCompleted(requestId);
