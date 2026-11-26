@@ -24,6 +24,8 @@ contract PrivateAdder is PodLib, PodUserSepolia {
     event AddRequested(bytes32 indexed requestId, address indexed caller);
     event AddCompleted(bytes32 indexed requestId);
 
+    error RequestNotPending(bytes32 requestId);
+
     constructor() PodLibBase(msg.sender) {
         // PodUserSepolia already set CREATE3 inbox; pin the add64 MPC executor.
         configureCoti(
@@ -50,10 +52,12 @@ contract PrivateAdder is PodLib, PodUserSepolia {
         emit AddRequested(requestId, msg.sender);
     }
 
-    function addCallback(bytes memory data) external onlyInbox {
+    /// @dev `onlyMpcExecutor` checks the remote chain and sender, not just the inbox transport.
+    ///      The result must belong to a request this contract sent and has not completed yet.
+    function addCallback(bytes memory data) external onlyMpcExecutor {
         bytes32 requestId = inbox.inboxSourceRequestId();
-        if (requestId == bytes32(0)) {
-            requestId = inbox.inboxRequestId();
+        if (statusByRequest[requestId] != RequestStatus.Pending) {
+            revert RequestNotPending(requestId);
         }
 
         ctUint64 sum = abi.decode(data, (ctUint64));

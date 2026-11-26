@@ -56,6 +56,7 @@ Custom COTI functions invoked through the Inbox must declare **`gt*`** parameter
 
 - `gt*` in EVM-visible APIs.
 - Wrong callback decode tuple or width.
-- Missing `onlyInbox` on callbacks.
+- Callbacks guarded by bare `onlyInbox` instead of `onlyMpcExecutor` (or `onlyInboxPeer`).
+- Falling back to `inboxRequestId()` when `inboxSourceRequestId()` is zero; that is a new inbound request, not a result.
 - Treating async PoD as synchronous return.
 - Decrypting `ctUint256` with narrow-lane `DataType` (use `Uint256` + two limbs).
